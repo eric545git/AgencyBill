@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Non-Renewal Notice – {{ firm.name }}</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; color: #222; }
+  h1 { color: #8b0000; border-bottom: 2px solid #8b0000; }
+  .notice { background: #fff3cd; border: 2px solid #dc3545; padding: 16px; border-radius: 4px; margin: 16px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+  td { border: 1px solid #ccc; padding: 8px; }
+  .footer { margin-top: 48px; font-size: 12px; color: #888; border-top: 1px solid #ccc; padding-top: 12px; }
+</style>
+</head>
+<body>
+<h1>Notice of Non-Renewal</h1>
+<div class="notice">
+  <strong>IMPORTANT NOTICE:</strong> This policy will NOT be renewed at its expiration date.
+  Please secure alternative coverage immediately.
+</div>
+
+<table>
+  <tr><td><strong>Insured</strong></td><td>{{ firm.name }}</td></tr>
+  <tr><td><strong>Policy Number</strong></td><td>{{ policy.policy_number }}</td></tr>
+  <tr><td><strong>Carrier</strong></td><td>{{ policy.carrier }}</td></tr>
+  <tr><td><strong>Expiration Date</strong></td><td>{{ policy.expiration_date | dateformat }}</td></tr>
+  <tr><td><strong>Reason</strong></td><td>{{ reason or 'Underwriting guidelines' }}</td></tr>
+</table>
+
+<p>This notice is provided in accordance with applicable state insurance regulations.
+You have the right to request the specific reasons for non-renewal.</p>
+
+<div class="footer">Generated: {{ generated_at }} | AgencyBill Renewal System</div>
+</body></html>

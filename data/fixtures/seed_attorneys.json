@@ -1,0 +1,15 @@
+[
+  {"id": "atty-001", "firm_id": "firm-001", "name": "Margaret Harrison", "bar_number": "NY-12345", "state_licensed": "NY", "practice_areas": ["litigation", "corporate"], "years_admitted": 1996},
+  {"id": "atty-002", "firm_id": "firm-001", "name": "James Cole", "bar_number": "NY-23456", "state_licensed": "NY", "practice_areas": ["securities", "corporate"], "years_admitted": 1998},
+  {"id": "atty-003", "firm_id": "firm-001", "name": "Priya Sharma", "bar_number": "NY-34567", "state_licensed": "NY", "practice_areas": ["real_estate", "corporate"], "years_admitted": 2008},
+  {"id": "atty-004", "firm_id": "firm-001", "name": "David Park", "bar_number": "NY-45678", "state_licensed": "NY", "practice_areas": ["litigation"], "years_admitted": 2015},
+  {"id": "atty-005", "firm_id": "firm-002", "name": "Susan Whitfield", "bar_number": "CA-56789", "state_licensed": "CA", "practice_areas": ["employment", "litigation"], "years_admitted": 2003},
+  {"id": "atty-006", "firm_id": "firm-002", "name": "Kevin Torres", "bar_number": "CA-67890", "state_licensed": "CA", "practice_areas": ["intellectual_property"], "years_admitted": 2010},
+  {"id": "atty-007", "firm_id": "firm-003", "name": "Carlos Ortega", "bar_number": "TX-78901", "state_licensed": "TX", "practice_areas": ["personal_injury", "family_law"], "years_admitted": 2011},
+  {"id": "atty-008", "firm_id": "firm-004", "name": "Robert Mercer", "bar_number": "IL-89012", "state_licensed": "IL", "practice_areas": ["corporate", "securities"], "years_admitted": 1982},
+  {"id": "atty-009", "firm_id": "firm-004", "name": "Linda Blackwell", "bar_number": "IL-90123", "state_licensed": "IL", "practice_areas": ["litigation", "employment"], "years_admitted": 1987},
+  {"id": "atty-010", "firm_id": "firm-004", "name": "Thomas Grant", "bar_number": "IL-01234", "state_licensed": "IL", "practice_areas": ["real_estate", "corporate"], "years_admitted": 2000},
+  {"id": "atty-011", "firm_id": "firm-004", "name": "Angela Rivera", "bar_number": "IL-11234", "state_licensed": "IL", "practice_areas": ["litigation"], "years_admitted": 2005},
+  {"id": "atty-012", "firm_id": "firm-005", "name": "Patricia Caldwell", "bar_number": "KY-21234", "state_licensed": "KY", "practice_areas": ["family_law", "estate_planning"], "years_admitted": 2008},
+  {"id": "atty-013", "firm_id": "firm-005", "name": "John Caldwell", "bar_number": "KY-31234", "state_licensed": "KY", "practice_areas": ["family_law", "criminal_defense"], "years_admitted": 2009}
+]

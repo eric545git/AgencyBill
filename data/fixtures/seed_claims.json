@@ -1,0 +1,58 @@
+[
+  {
+    "id": "clm-001",
+    "policy_id": "pol-001",
+    "firm_id": "firm-001",
+    "claim_number": "CLM-2023-001",
+    "claim_date": "2023-03-15",
+    "closed_date": "2024-01-10",
+    "claim_type": "malpractice",
+    "practice_area": "securities",
+    "amount_paid": 125000.00,
+    "amount_reserved": 0,
+    "status": "closed",
+    "description": "Client alleged failure to advise on SEC disclosure requirements"
+  },
+  {
+    "id": "clm-002",
+    "policy_id": "pol-001",
+    "firm_id": "firm-001",
+    "claim_number": "CLM-2024-007",
+    "claim_date": "2024-08-20",
+    "closed_date": null,
+    "claim_type": "malpractice",
+    "practice_area": "litigation",
+    "amount_paid": 0,
+    "amount_reserved": 85000.00,
+    "status": "open",
+    "description": "Missed statute of limitations in personal injury subrogation matter"
+  },
+  {
+    "id": "clm-003",
+    "policy_id": "pol-004",
+    "firm_id": "firm-004",
+    "claim_number": "CLM-2022-015",
+    "claim_date": "2022-11-05",
+    "closed_date": "2023-06-30",
+    "claim_type": "malpractice",
+    "practice_area": "corporate",
+    "amount_paid": 215000.00,
+    "amount_reserved": 0,
+    "status": "closed",
+    "description": "Drafting error in merger agreement resulted in adverse tax consequences"
+  },
+  {
+    "id": "clm-004",
+    "policy_id": "pol-004",
+    "firm_id": "firm-004",
+    "claim_number": "CLM-2024-003",
+    "claim_date": "2024-02-14",
+    "closed_date": null,
+    "claim_type": "malpractice",
+    "practice_area": "securities",
+    "amount_paid": 50000.00,
+    "amount_reserved": 300000.00,
+    "status": "open",
+    "description": "Alleged negligence in securities offering memorandum review"
+  }
+]

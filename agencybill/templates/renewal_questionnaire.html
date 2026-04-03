@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Renewal Application – {{ firm.name }}</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; color: #222; }
+  h1 { color: #003366; border-bottom: 2px solid #003366; padding-bottom: 8px; }
+  h2 { color: #003366; margin-top: 32px; }
+  .field { margin: 12px 0; }
+  .label { font-weight: bold; display: inline-block; width: 260px; }
+  .value { color: #444; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+  th { background: #003366; color: #fff; padding: 8px; text-align: left; }
+  td { border: 1px solid #ccc; padding: 8px; }
+  .footer { margin-top: 48px; font-size: 12px; color: #888; border-top: 1px solid #ccc; padding-top: 12px; }
+</style>
+</head>
+<body>
+<h1>Lawyers Professional Liability — Renewal Application</h1>
+<p><strong>Policy Number:</strong> {{ policy.policy_number }} &nbsp;|&nbsp;
+   <strong>Expiration:</strong> {{ policy.expiration_date | dateformat }} &nbsp;|&nbsp;
+   <strong>Carrier:</strong> {{ policy.carrier }}</p>
+
+<h2>Firm Information</h2>
+<div class="field"><span class="label">Firm Name:</span> <span class="value">{{ firm.name }}</span></div>
+<div class="field"><span class="label">Primary State:</span> <span class="value">{{ firm.state }}</span></div>
+<div class="field"><span class="label">Contact Email:</span> <span class="value">{{ firm.email }}</span></div>
+
+<h2>Attorney Roster (as of renewal date)</h2>
+<table>
+  <tr><th>#</th><th>Name</th><th>Bar #</th><th>State</th><th>Practice Areas</th><th>Years Admitted</th></tr>
+  {% for atty in attorneys %}
+  <tr>
+    <td>{{ loop.index }}</td>
+    <td>{{ atty.name }}</td>
+    <td>{{ atty.bar_number or '—' }}</td>
+    <td>{{ atty.state_licensed or '—' }}</td>
+    <td>{{ atty.practice_areas | join(', ') if atty.practice_areas is iterable and atty.practice_areas is not string else atty.practice_areas or '—' }}</td>
+    <td>{{ atty.years_admitted or '—' }}</td>
+  </tr>
+  {% else %}
+  <tr><td colspan="6">No attorneys on file.</td></tr>
+  {% endfor %}
+</table>
+
+<h2>Practice Information</h2>
+<div class="field"><span class="label">Total Attorneys:</span> <span class="value">{{ application.attorney_count }}</span></div>
+<div class="field"><span class="label">Gross Revenue (prior year):</span> <span class="value">{{ application.gross_revenue | currency }}</span></div>
+<div class="field"><span class="label">Prior Acts Coverage:</span> <span class="value">{{ 'Yes' if application.prior_acts_coverage else 'No' }}</span></div>
+
+<h2>Claims / Incidents (past 5 years)</h2>
+<div class="field"><span class="label">Claims Disclosed:</span> <span class="value">{{ 'Yes' if application.claims_history_disclosed else 'No' }}</span></div>
+{% if application.claims_history_disclosed %}
+<p><em>See attached loss run for details.</em></p>
+{% endif %}
+
+<div class="footer">Generated: {{ generated_at }} | AgencyBill Renewal System</div>
+</body></html>

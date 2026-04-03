@@ -1,0 +1,67 @@
+[
+  {
+    "id": "firm-001",
+    "name": "Harrison & Cole LLP",
+    "tax_id": "45-1234567",
+    "address_line1": "350 Fifth Avenue, Suite 4200",
+    "city": "New York",
+    "state": "NY",
+    "zip": "10118",
+    "phone": "212-555-0101",
+    "email": "renewal@harrisoncole.com",
+    "firm_type": "mid",
+    "year_founded": 1998
+  },
+  {
+    "id": "firm-002",
+    "name": "Whitfield & Associates",
+    "tax_id": "94-2345678",
+    "address_line1": "555 California Street",
+    "city": "San Francisco",
+    "state": "CA",
+    "zip": "94104",
+    "phone": "415-555-0202",
+    "email": "admin@whitfieldlaw.com",
+    "firm_type": "small",
+    "year_founded": 2005
+  },
+  {
+    "id": "firm-003",
+    "name": "Ortega Legal Group",
+    "tax_id": "75-3456789",
+    "address_line1": "1700 Pacific Avenue",
+    "city": "Dallas",
+    "state": "TX",
+    "zip": "75201",
+    "phone": "214-555-0303",
+    "email": "ortega@ortegalegal.com",
+    "firm_type": "solo",
+    "year_founded": 2012
+  },
+  {
+    "id": "firm-004",
+    "name": "Mercer Blackwell LLP",
+    "tax_id": "36-4567890",
+    "address_line1": "233 South Wacker Drive",
+    "city": "Chicago",
+    "state": "IL",
+    "zip": "60606",
+    "phone": "312-555-0404",
+    "email": "info@mercerblackwell.com",
+    "firm_type": "large",
+    "year_founded": 1985
+  },
+  {
+    "id": "firm-005",
+    "name": "Caldwell Family Law",
+    "tax_id": "61-5678901",
+    "address_line1": "800 West Main Street",
+    "city": "Louisville",
+    "state": "KY",
+    "zip": "40202",
+    "phone": "502-555-0505",
+    "email": "caldwell@caldwellfamilylaw.com",
+    "firm_type": "small",
+    "year_founded": 2009
+  }
+]

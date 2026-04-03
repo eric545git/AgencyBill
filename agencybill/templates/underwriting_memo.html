@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Underwriting Memo – {{ firm.name }}</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; color: #222; }
+  h1 { color: #003366; border-bottom: 2px solid #003366; }
+  h2 { color: #003366; }
+  .risk-score { font-size: 48px; font-weight: bold; }
+  .eligible { color: green; } .declined { color: red; } .refer { color: orange; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+  th { background: #003366; color: #fff; padding: 8px; text-align: left; }
+  td { border: 1px solid #ccc; padding: 8px; }
+  .footer { margin-top: 48px; font-size: 12px; color: #888; border-top: 1px solid #ccc; padding-top: 12px; }
+</style>
+</head>
+<body>
+<h1>Underwriting Memorandum</h1>
+<p><strong>Firm:</strong> {{ firm.name }} &nbsp;|&nbsp;
+   <strong>Policy:</strong> {{ policy.policy_number }} &nbsp;|&nbsp;
+   <strong>Underwriter:</strong> {{ underwriter or 'Auto-assigned' }}</p>
+
+<h2>Risk Assessment</h2>
+<div>Risk Score: <span class="risk-score {{ assessment.eligibility }}">{{ assessment.risk_score }}/10</span></div>
+<p><strong>Eligibility:</strong> <span class="{{ assessment.eligibility }}">{{ assessment.eligibility | upper }}</span></p>
+<p><strong>Reason:</strong> {{ assessment.reason }}</p>
+
+<h2>Loss Run Summary (5 Years)</h2>
+<table>
+  <tr><th>Metric</th><th>Value</th></tr>
+  <tr><td>Total Claims</td><td>{{ loss_run.total_claims }}</td></tr>
+  <tr><td>Open Claims</td><td>{{ loss_run.open_claims }}</td></tr>
+  <tr><td>Total Paid</td><td>{{ loss_run.total_paid | currency }}</td></tr>
+  <tr><td>Total Reserved</td><td>{{ loss_run.total_reserved | currency }}</td></tr>
+  <tr><td>Total Incurred</td><td>{{ loss_run.total_incurred | currency }}</td></tr>
+</table>
+
+<h2>Practice Areas</h2>
+<p>{{ practice_areas | join(', ') if practice_areas else 'Not specified' }}</p>
+
+<div class="footer">Generated: {{ generated_at }} | Confidential — Underwriting Use Only</div>
+</body></html>

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Binder – {{ firm.name }}</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; color: #222; }
+  h1 { color: #003366; border-bottom: 3px solid #003366; }
+  .binder-number { font-size: 28px; font-weight: bold; color: #003366; }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+  th { background: #003366; color: #fff; padding: 8px; text-align: left; }
+  td { border: 1px solid #ccc; padding: 8px; }
+  .notice { background: #fff3cd; border: 1px solid #ffc107; padding: 12px; border-radius: 4px; margin: 16px 0; }
+  .footer { margin-top: 48px; font-size: 12px; color: #888; border-top: 1px solid #ccc; padding-top: 12px; }
+</style>
+</head>
+<body>
+<h1>Certificate of Temporary Insurance (Binder)</h1>
+<p class="binder-number">Binder No.: {{ binder_number }}</p>
+<div class="notice">This binder provides temporary evidence of insurance coverage pending issuance of the formal policy. Coverage is bound as of the effective date shown below.</div>
+
+<table>
+  <tr><th colspan="2">Coverage Summary</th></tr>
+  <tr><td><strong>Insured</strong></td><td>{{ firm.name }}</td></tr>
+  <tr><td><strong>Carrier</strong></td><td>{{ policy.carrier }}</td></tr>
+  <tr><td><strong>Policy Type</strong></td><td>Lawyers Professional Liability</td></tr>
+  <tr><td><strong>Effective Date</strong></td><td>{{ effective_date }}</td></tr>
+  <tr><td><strong>Expiration Date</strong></td><td>{{ expiration_date }}</td></tr>
+  <tr><td><strong>Per-Claim Limit</strong></td><td>${{ "{:,}".format(quote.per_claim_limit) }}</td></tr>
+  <tr><td><strong>Aggregate Limit</strong></td><td>${{ "{:,}".format(quote.aggregate_limit) }}</td></tr>
+  <tr><td><strong>Deductible</strong></td><td>${{ "{:,}".format(quote.deductible) }}</td></tr>
+  <tr><td><strong>Annual Premium</strong></td><td>{{ quote.annual_premium | currency }}</td></tr>
+  <tr><td><strong>Broker</strong></td><td>{{ broker.name if broker else 'N/A' }}</td></tr>
+</table>
+
+<div class="footer">Generated: {{ generated_at }} | AgencyBill Renewal System | This binder expires 30 days from effective date unless replaced by a formal policy.</div>
+</body></html>

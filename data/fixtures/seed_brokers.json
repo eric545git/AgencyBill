@@ -1,0 +1,20 @@
+[
+  {
+    "id": "broker-001",
+    "name": "Apex Insurance Group",
+    "license_number": "LIC-NY-99001",
+    "state": "NY",
+    "email": "renewals@apexig.com",
+    "phone": "800-555-0010",
+    "agency_name": "Apex Insurance Group LLC"
+  },
+  {
+    "id": "broker-002",
+    "name": "Patriot Specialty Lines",
+    "license_number": "LIC-IL-88002",
+    "state": "IL",
+    "email": "submissions@patriotspecialty.com",
+    "phone": "800-555-0020",
+    "agency_name": "Patriot Specialty Lines Inc."
+  }
+]
