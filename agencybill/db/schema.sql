@@ -203,6 +203,65 @@ CREATE TABLE IF NOT EXISTS remittances (
 );
 
 -- ─────────────────────────────────────────────
+-- MARKET SUBMISSIONS & QUOTES
+-- ─────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS markets (
+    id              TEXT PRIMARY KEY,
+    name            TEXT NOT NULL,
+    contact_name    TEXT,
+    contact_email   TEXT,
+    specialty       TEXT,           -- e.g. "LPL", "Professional Lines"
+    appetite_notes  TEXT,           -- what risks they prefer
+    states          TEXT,           -- JSON array of states they write, empty = all
+    min_attorneys   INTEGER DEFAULT 1,
+    max_attorneys   INTEGER,
+    min_premium     REAL,
+    max_premium     REAL,
+    active          INTEGER DEFAULT 1,
+    created_at      TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS market_submissions (
+    id                  TEXT PRIMARY KEY,
+    workflow_id         TEXT NOT NULL REFERENCES renewal_workflows(id),
+    market_id           TEXT NOT NULL REFERENCES markets(id),
+    submitted_at        TEXT DEFAULT (datetime('now')),
+    submission_notes    TEXT,
+    status              TEXT DEFAULT 'submitted'
+        CHECK(status IN ('submitted','quoted','declined','passed','bound','no_response')),
+    follow_up_at        TEXT,
+    last_contact_at     TEXT,
+    declination_reason  TEXT
+);
+
+CREATE TABLE IF NOT EXISTS market_quotes (
+    id                  TEXT PRIMARY KEY,
+    submission_id       TEXT NOT NULL REFERENCES market_submissions(id),
+    workflow_id         TEXT NOT NULL REFERENCES renewal_workflows(id),
+    market_id           TEXT NOT NULL REFERENCES markets(id),
+    received_at         TEXT DEFAULT (datetime('now')),
+    quote_number        TEXT,
+    carrier             TEXT,
+    per_claim_limit     INTEGER,
+    aggregate_limit     INTEGER,
+    deductible          INTEGER,
+    annual_premium      REAL,
+    effective_date      TEXT,
+    expiration_date     TEXT,
+    retroactive_date    TEXT,
+    prior_acts          INTEGER DEFAULT 1,
+    exclusions_json     TEXT,       -- JSON array of exclusion strings
+    conditions_json     TEXT,       -- JSON array of condition strings
+    valid_through       TEXT,
+    status              TEXT DEFAULT 'received'
+        CHECK(status IN ('received','presented','accepted','declined','expired')),
+    notes               TEXT,
+    entered_by          TEXT DEFAULT 'human',
+    entered_at          TEXT DEFAULT (datetime('now'))
+);
+
+-- ─────────────────────────────────────────────
 -- HUMAN CHECKPOINTS & AUDIT
 -- ─────────────────────────────────────────────
 

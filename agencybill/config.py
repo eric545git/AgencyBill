@@ -26,8 +26,8 @@ PHASES = [
     "PRE_RENEWAL",
     "APPLICATION",
     "UNDERWRITING",
-    "QUOTING",
-    "NEGOTIATION",
+    "MARKET_SUBMISSION",
+    "QUOTE_COLLECTION",
     "BINDING",
     "INVOICING",
     "REMITTANCE",
@@ -35,17 +35,17 @@ PHASES = [
 ]
 
 PHASE_LABELS = {
-    "PRE_RENEWAL":   "Phase 1 — Pre-Renewal Triage",
-    "APPLICATION":   "Phase 2 — Renewal Application",
-    "UNDERWRITING":  "Phase 3 — Underwriting Review",
-    "QUOTING":       "Phase 4 — Quote Generation",
-    "NEGOTIATION":   "Phase 5 — Quote Negotiation",
-    "BINDING":       "Phase 6 — Binding & Issuance",
-    "INVOICING":     "Phase 7 — Invoicing & Payment",
-    "REMITTANCE":    "Phase 8 — Premium Remittance",
-    "COMPLETE":      "Complete",
-    "NON_RENEWAL":   "Non-Renewal",
-    "DECLINED":      "Declined",
+    "PRE_RENEWAL":        "Phase 1 — Pre-Renewal Triage",
+    "APPLICATION":        "Phase 2 — Renewal Application",
+    "UNDERWRITING":       "Phase 3 — Underwriting Review",
+    "MARKET_SUBMISSION":  "Phase 4 — Market Submission",
+    "QUOTE_COLLECTION":   "Phase 5 — Quote Collection",
+    "BINDING":            "Phase 6 — Binding & Issuance",
+    "INVOICING":          "Phase 7 — Invoicing & Payment",
+    "REMITTANCE":         "Phase 8 — Premium Remittance",
+    "COMPLETE":           "Complete",
+    "NON_RENEWAL":        "Non-Renewal",
+    "DECLINED":           "Declined",
 }
 
 # LPL base rates per attorney by state tier (simplified)

@@ -13,22 +13,22 @@ from agencybill.display.console import (
 from agencybill.agents.pre_renewal import PreRenewalAgent
 from agencybill.agents.application import ApplicationAgent
 from agencybill.agents.underwriting import UnderwritingAgent
-from agencybill.agents.quoting import QuotingAgent
-from agencybill.agents.negotiation import NegotiationAgent
+from agencybill.agents.market_submission import MarketSubmissionAgent
+from agencybill.agents.quote_collection import QuoteCollectionAgent
 from agencybill.agents.binding import BindingAgent
 from agencybill.agents.invoicing import InvoicingAgent
 from agencybill.agents.remittance import RemittanceAgent
 
 
 AGENT_MAP = {
-    "PRE_RENEWAL":  PreRenewalAgent,
-    "APPLICATION":  ApplicationAgent,
-    "UNDERWRITING": UnderwritingAgent,
-    "QUOTING":      QuotingAgent,
-    "NEGOTIATION":  NegotiationAgent,
-    "BINDING":      BindingAgent,
-    "INVOICING":    InvoicingAgent,
-    "REMITTANCE":   RemittanceAgent,
+    "PRE_RENEWAL":       PreRenewalAgent,
+    "APPLICATION":       ApplicationAgent,
+    "UNDERWRITING":      UnderwritingAgent,
+    "MARKET_SUBMISSION": MarketSubmissionAgent,
+    "QUOTE_COLLECTION":  QuoteCollectionAgent,
+    "BINDING":           BindingAgent,
+    "INVOICING":         InvoicingAgent,
+    "REMITTANCE":        RemittanceAgent,
 }
 
 # Phases that require a human decision before the agent runs
@@ -49,9 +49,9 @@ CHECKPOINTS_AFTER = {
         "prompt": "Underwriting has completed its review. What is the underwriting decision?",
         "options": ["Approve — proceed to quoting", "Refer — proceed with notation", "Decline renewal"],
     },
-    "NEGOTIATION": {
-        "prompt": "Quote has been presented. Has the broker/insured accepted?",
-        "options": ["Accepted — proceed to binding", "Counter-offer — revise quote", "Declined — non-renewal"],
+    "QUOTE_COLLECTION": {
+        "prompt": "Market quotes have been compared and the best quote accepted. Proceed to binding?",
+        "options": ["Accepted — proceed to binding", "Hold — revise selection", "Declined — non-renewal"],
     },
     "INVOICING": {
         "prompt": "Invoice has been issued. Has premium payment been received?",
@@ -150,11 +150,11 @@ class WorkflowOrchestrator:
                         update_workflow_status(self.workflow_id, "active",
                                                "Referred — senior underwriter notified")
 
-                elif phase == "NEGOTIATION":
-                    if "counter" in decision_lower:
-                        print_warning("Counter-offer requested. Pausing for quote revision.")
+                elif phase == "QUOTE_COLLECTION":
+                    if "hold" in decision_lower:
+                        print_warning("Quote selection on hold. Pausing for review.")
                         update_workflow_status(self.workflow_id, "paused",
-                                               "Paused for quote counter-offer")
+                                               "Paused for quote selection review")
                         return
                     if "declined" in decision_lower:
                         self._handle_terminal("non_renewal")

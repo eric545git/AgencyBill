@@ -20,6 +20,9 @@ from agencybill.tools.audit_tools import (
 )
 from agencybill.tools.payment_tools import get_invoices_for_workflow, get_remittances
 from agencybill.tools.notification_tools import get_notifications
+from agencybill.tools.market_tools import (
+    get_submissions, get_market_quotes, record_market_quote,
+)
 from agencybill.web import worker
 
 _HERE = Path(__file__).parent
@@ -39,8 +42,8 @@ def _short_id(v: str) -> str:
     return str(v)[:8] if v else "—"
 
 def _phase_pct(phase: str) -> int:
-    order = ["PRE_RENEWAL","APPLICATION","UNDERWRITING","QUOTING",
-             "NEGOTIATION","BINDING","INVOICING","REMITTANCE","COMPLETE"]
+    order = ["PRE_RENEWAL","APPLICATION","UNDERWRITING","MARKET_SUBMISSION",
+             "QUOTE_COLLECTION","BINDING","INVOICING","REMITTANCE","COMPLETE"]
     try:
         return round((order.index(phase) + 1) / len(order) * 100)
     except ValueError:
@@ -117,6 +120,8 @@ async def workflow_detail(request: Request, workflow_id: str):
     notifs    = get_notifications(workflow_id)
     wf_events = _workflow_events(workflow_id)
     quotes    = _get_quotes(workflow_id)
+    submissions = get_submissions(workflow_id)
+    mkt_quotes  = get_market_quotes(workflow_id)
     worker_status = worker.get_status(workflow_id)
 
     # pending checkpoint (if any)
@@ -132,6 +137,8 @@ async def workflow_detail(request: Request, workflow_id: str):
         "notifications": notifs,
         "wf_events": wf_events,
         "quotes": quotes,
+        "submissions": submissions,
+        "mkt_quotes": mkt_quotes,
         "pending_cp": pending_cp,
         "worker_status": worker_status,
     })
@@ -207,6 +214,45 @@ async def start_workflow(policy_id: str = Form(...)):
     wf = get_or_create_workflow(policy_id)
     worker.start_workflow(policy_id, wf["id"])
     return RedirectResponse(f"/workflows/{wf['id']}", status_code=303)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RECORD MARKET QUOTE
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.post("/workflows/{workflow_id}/record-quote")
+async def record_quote(
+    workflow_id: str,
+    submission_id: str = Form(...),
+    market_id: str = Form(...),
+    carrier: str = Form(""),
+    quote_number: str = Form(""),
+    per_claim_limit: int = Form(...),
+    aggregate_limit: int = Form(...),
+    deductible: int = Form(...),
+    annual_premium: float = Form(...),
+    effective_date: str = Form(""),
+    expiration_date: str = Form(""),
+    retroactive_date: str = Form(""),
+    notes: str = Form(""),
+):
+    record_market_quote(
+        submission_id=submission_id,
+        workflow_id=workflow_id,
+        market_id=market_id,
+        per_claim_limit=per_claim_limit,
+        aggregate_limit=aggregate_limit,
+        deductible=deductible,
+        annual_premium=annual_premium,
+        carrier=carrier,
+        quote_number=quote_number,
+        effective_date=effective_date,
+        expiration_date=expiration_date,
+        retroactive_date=retroactive_date,
+        notes=notes,
+        entered_by="web_user",
+    )
+    return RedirectResponse(f"/workflows/{workflow_id}", status_code=303)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -142,8 +142,154 @@
 
   </div>
 
-  <!-- Right: audit trail (live, polls every 4s) -->
-  <div class="lg:col-span-2">
+  <!-- Right: market submissions + audit trail -->
+  <div class="lg:col-span-2 flex flex-col gap-4">
+
+  <!-- Market Submissions Panel -->
+  {% if submissions %}
+  <div class="card bg-base-100 shadow">
+    <div class="card-body p-4">
+      <h2 class="card-title text-sm mb-3">Market Submissions</h2>
+
+      <!-- Submission status grid -->
+      <div class="overflow-x-auto mb-3">
+        <table class="table table-xs">
+          <thead>
+            <tr class="text-xs text-base-content/40">
+              <th>Market</th><th>Submitted</th><th>Status</th><th>Follow-up</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for sub in submissions %}
+          <tr>
+            <td class="font-medium">{{ sub.market_name }}</td>
+            <td class="text-xs text-base-content/50">{{ sub.submitted_at[:10] if sub.submitted_at else '—' }}</td>
+            <td>
+              <span class="badge badge-xs
+                {% if sub.status == 'quoted' %}badge-success
+                {% elif sub.status == 'bound' %}badge-primary
+                {% elif sub.status in ('declined','no_response','passed') %}badge-error
+                {% else %}badge-ghost{% endif %}">
+                {{ sub.status }}
+              </span>
+            </td>
+            <td class="text-xs text-base-content/50">{{ sub.follow_up_at[:10] if sub.follow_up_at else '—' }}</td>
+            <td>
+              {% if sub.status == 'submitted' %}
+              <button class="btn btn-xs btn-outline"
+                      onclick="document.getElementById('quote-modal-{{ sub.id }}').showModal()">
+                Record Quote
+              </button>
+              {% endif %}
+            </td>
+          </tr>
+          <!-- Record Quote Modal -->
+          {% if sub.status == 'submitted' %}
+          <dialog id="quote-modal-{{ sub.id }}" class="modal">
+            <div class="modal-box max-w-lg">
+              <h3 class="font-bold text-lg mb-1">Record Quote — {{ sub.market_name }}</h3>
+              <p class="text-xs text-base-content/50 mb-4">Enter the quote received from this market.</p>
+              <form method="post" action="/workflows/{{ wf.id }}/record-quote">
+                <input type="hidden" name="submission_id" value="{{ sub.id }}" />
+                <input type="hidden" name="market_id" value="{{ sub.market_id }}" />
+                <div class="grid grid-cols-2 gap-3">
+                  <div class="form-control col-span-2">
+                    <label class="label py-0.5"><span class="label-text text-xs">Carrier Name</span></label>
+                    <input type="text" name="carrier" placeholder="e.g. Markel Insurance Co." class="input input-bordered input-sm" />
+                  </div>
+                  <div class="form-control">
+                    <label class="label py-0.5"><span class="label-text text-xs">Quote Number</span></label>
+                    <input type="text" name="quote_number" placeholder="e.g. MKL-2024-00123" class="input input-bordered input-sm" />
+                  </div>
+                  <div class="form-control">
+                    <label class="label py-0.5"><span class="label-text text-xs">Annual Premium ($) *</span></label>
+                    <input type="number" name="annual_premium" step="0.01" min="0" required class="input input-bordered input-sm" />
+                  </div>
+                  <div class="form-control">
+                    <label class="label py-0.5"><span class="label-text text-xs">Per-Claim Limit ($) *</span></label>
+                    <input type="number" name="per_claim_limit" min="0" required placeholder="1000000" class="input input-bordered input-sm" />
+                  </div>
+                  <div class="form-control">
+                    <label class="label py-0.5"><span class="label-text text-xs">Aggregate Limit ($) *</span></label>
+                    <input type="number" name="aggregate_limit" min="0" required placeholder="1000000" class="input input-bordered input-sm" />
+                  </div>
+                  <div class="form-control">
+                    <label class="label py-0.5"><span class="label-text text-xs">Deductible ($) *</span></label>
+                    <input type="number" name="deductible" min="0" required placeholder="2500" class="input input-bordered input-sm" />
+                  </div>
+                  <div class="form-control">
+                    <label class="label py-0.5"><span class="label-text text-xs">Effective Date</span></label>
+                    <input type="date" name="effective_date" class="input input-bordered input-sm" />
+                  </div>
+                  <div class="form-control">
+                    <label class="label py-0.5"><span class="label-text text-xs">Expiration Date</span></label>
+                    <input type="date" name="expiration_date" class="input input-bordered input-sm" />
+                  </div>
+                  <div class="form-control">
+                    <label class="label py-0.5"><span class="label-text text-xs">Retroactive Date</span></label>
+                    <input type="date" name="retroactive_date" class="input input-bordered input-sm" />
+                  </div>
+                  <div class="form-control col-span-2">
+                    <label class="label py-0.5"><span class="label-text text-xs">Notes / Exclusions</span></label>
+                    <textarea name="notes" rows="2" class="textarea textarea-bordered textarea-sm" placeholder="Coverage conditions, exclusions, or other notes..."></textarea>
+                  </div>
+                </div>
+                <div class="modal-action mt-4">
+                  <button type="submit" class="btn btn-primary btn-sm">Save Quote</button>
+                  <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('quote-modal-{{ sub.id }}').close()">Cancel</button>
+                </div>
+              </form>
+            </div>
+            <form method="dialog" class="modal-backdrop"><button>close</button></form>
+          </dialog>
+          {% endif %}
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Quote comparison table -->
+      {% if mkt_quotes %}
+      <div>
+        <h3 class="text-xs font-semibold text-base-content/50 mb-2">Received Quotes — Comparison</h3>
+        <div class="overflow-x-auto">
+          <table class="table table-xs">
+            <thead>
+              <tr class="text-xs text-base-content/40">
+                <th>Market / Carrier</th><th>Premium</th><th>Limits</th><th>Deductible</th><th>Retro Date</th><th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+            {% for q in mkt_quotes | sort(attribute='annual_premium') %}
+            <tr class="{% if q.status == 'accepted' %}bg-success/10 font-semibold{% elif q.status == 'declined' %}opacity-40{% endif %}">
+              <td>
+                <div>{{ q.market_name }}</div>
+                {% if q.carrier %}<div class="text-xs text-base-content/50">{{ q.carrier }}</div>{% endif %}
+              </td>
+              <td class="font-semibold text-primary">{{ q.annual_premium | currency }}/yr</td>
+              <td class="text-xs">{{ q.per_claim_limit | currency }} / {{ q.aggregate_limit | currency }}</td>
+              <td class="text-xs">{{ q.deductible | currency }}</td>
+              <td class="text-xs">{{ q.retroactive_date[:10] if q.retroactive_date else '—' }}</td>
+              <td>
+                <span class="badge badge-xs
+                  {% if q.status == 'accepted' %}badge-success
+                  {% elif q.status == 'declined' %}badge-error
+                  {% else %}badge-ghost{% endif %}">
+                  {{ q.status }}
+                </span>
+              </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+  {% endif %}
+
     <div class="card bg-base-100 shadow h-full">
       <div class="card-body p-0">
         <div class="flex items-center justify-between px-5 pt-4 pb-3 border-b border-base-200">

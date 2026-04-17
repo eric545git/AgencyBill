@@ -47,6 +47,7 @@ def seed():
     attorneys = load("seed_attorneys.json")
     policies = load("seed_policies.json")
     claims = load("seed_claims.json")
+    markets = load("seed_markets.json")
 
     with db() as conn:
         # Brokers
@@ -106,9 +107,23 @@ def seed():
                  c.get("description")),
             )
 
+        # Markets
+        for m in markets:
+            conn.execute(
+                """INSERT OR IGNORE INTO markets
+                   (id, name, contact_name, contact_email, specialty, appetite_notes,
+                    states, min_attorneys, max_attorneys, min_premium, max_premium, active)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (m["id"], m["name"], m.get("contact_name"), m.get("contact_email"),
+                 m.get("specialty"), m.get("appetite_notes"),
+                 json.dumps(m.get("states", [])),
+                 m.get("min_attorneys", 1), m.get("max_attorneys"),
+                 m.get("min_premium"), m.get("max_premium"), m.get("active", 1)),
+            )
+
     print_success(f"Seeded {len(brokers)} brokers, {len(firms)} firms, "
                   f"{len(attorneys)} attorneys, {len(policies)} policies, "
-                  f"{len(claims)} claims.")
+                  f"{len(claims)} claims, {len(markets)} markets.")
 
 
 # ─────────────────────────────────────────────
@@ -267,6 +282,42 @@ def policies():
     data = [row_to_dict(r) for r in rows]
     print_policies_table(data)
     print_info(f"{len(data)} policy(ies).")
+
+
+# ─────────────────────────────────────────────
+# markets
+# ─────────────────────────────────────────────
+
+@cli.command()
+@click.option("--all", "show_all", is_flag=True, default=False, help="Include inactive markets")
+def markets(show_all: bool):
+    """List available wholesale markets and program administrators."""
+    from agencybill.tools.market_tools import list_markets as _list_markets
+    from rich.table import Table
+
+    print_header("Wholesale Markets & Program Administrators")
+    data = _list_markets(active_only=not show_all)
+    if not data:
+        print_info("No markets found. Run: agencybill seed")
+        return
+
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("Name", min_width=25)
+    table.add_column("Specialty", min_width=20)
+    table.add_column("Contact", min_width=18)
+    table.add_column("Attorneys", justify="center")
+    table.add_column("Premium Range")
+
+    for m in data:
+        atty_range = f"{m.get('min_attorneys', 1) or 1}–{m.get('max_attorneys') or '∞'}"
+        prem_lo = f"${m['min_premium']:,.0f}" if m.get("min_premium") else "—"
+        prem_hi = f"${m['max_premium']:,.0f}" if m.get("max_premium") else "—"
+        table.add_row(
+            m["name"], m.get("specialty", ""), m.get("contact_name", ""),
+            atty_range, f"{prem_lo} – {prem_hi}",
+        )
+    console.print(table)
+    print_info(f"{len(data)} market(s).")
 
 
 # ─────────────────────────────────────────────
