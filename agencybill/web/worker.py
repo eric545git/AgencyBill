@@ -12,6 +12,40 @@ from agencybill.tools.audit_tools import log_audit_event
 _registry: dict[str, dict] = {}
 _lock = threading.Lock()
 
+_ALERT_SCAN_INTERVAL = 60  # seconds between alert scans
+_scanner_thread: threading.Thread | None = None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ALERT SCANNER
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _alert_scanner_loop() -> None:
+    import time
+    from agencybill.tools.alerts_tools import run_alert_scan
+    while True:
+        try:
+            run_alert_scan()
+        except Exception:
+            pass  # never crash the scanner thread
+        time.sleep(_ALERT_SCAN_INTERVAL)
+
+
+def ensure_alert_scanner() -> None:
+    """Start the alert scanner thread if not already running."""
+    global _scanner_thread
+    if _scanner_thread and _scanner_thread.is_alive():
+        return
+    _scanner_thread = threading.Thread(
+        target=_alert_scanner_loop, daemon=True, name="alert-scanner"
+    )
+    _scanner_thread.start()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WORKFLOW RUNNER
+# ─────────────────────────────────────────────────────────────────────────────
+
 
 def get_status(workflow_id: str) -> dict:
     with _lock:

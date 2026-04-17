@@ -23,6 +23,10 @@ from agencybill.tools.notification_tools import get_notifications
 from agencybill.tools.market_tools import (
     get_submissions, get_market_quotes, record_market_quote,
 )
+from agencybill.tools.alerts_tools import (
+    get_alerts, count_open_alerts, acknowledge_alert, resolve_alert,
+    get_alerts_for_workflow, run_alert_scan,
+)
 from agencybill.web import worker
 
 _HERE = Path(__file__).parent
@@ -58,6 +62,7 @@ templates.env.globals["now"] = lambda: datetime.now().strftime("%H:%M:%S")
 @app.on_event("startup")
 def _startup():
     init_db()
+    worker.ensure_alert_scanner()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -120,8 +125,10 @@ async def workflow_detail(request: Request, workflow_id: str):
     notifs    = get_notifications(workflow_id)
     wf_events = _workflow_events(workflow_id)
     quotes    = _get_quotes(workflow_id)
-    submissions = get_submissions(workflow_id)
-    mkt_quotes  = get_market_quotes(workflow_id)
+    submissions   = get_submissions(workflow_id)
+    mkt_quotes    = get_market_quotes(workflow_id)
+    wf_alerts     = [a for a in get_alerts_for_workflow(workflow_id)
+                     if a["status"] in ("open", "acknowledged")]
     worker_status = worker.get_status(workflow_id)
 
     # pending checkpoint (if any)
@@ -139,6 +146,7 @@ async def workflow_detail(request: Request, workflow_id: str):
         "quotes": quotes,
         "submissions": submissions,
         "mkt_quotes": mkt_quotes,
+        "wf_alerts": wf_alerts,
         "pending_cp": pending_cp,
         "worker_status": worker_status,
     })
@@ -217,6 +225,42 @@ async def start_workflow(policy_id: str = Form(...)):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# ALERTS & EXCEPTIONS
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/alerts", response_class=HTMLResponse)
+async def alerts_view(request: Request, severity: str = "", status: str = "open"):
+    run_alert_scan()
+    alerts = get_alerts(
+        status=status or "open",
+        severity=severity or None,
+    )
+    critical = count_open_alerts("critical")
+    warning  = count_open_alerts("warning")
+    info     = count_open_alerts("info")
+    return templates.TemplateResponse(request, "alerts.html", {
+        "alerts": alerts,
+        "filter_severity": severity,
+        "filter_status": status,
+        "critical_count": critical,
+        "warning_count": warning,
+        "info_count": info,
+    })
+
+
+@app.post("/alerts/{alert_id}/acknowledge")
+async def ack_alert(alert_id: str):
+    acknowledge_alert(alert_id)
+    return RedirectResponse("/alerts", status_code=303)
+
+
+@app.post("/alerts/{alert_id}/resolve")
+async def res_alert(alert_id: str):
+    resolve_alert(alert_id)
+    return RedirectResponse("/alerts", status_code=303)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # RECORD MARKET QUOTE
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -288,6 +332,25 @@ async def htmx_queue_count(request: Request):
     count = len(_pending_checkpoints())
     badge = f'<span id="queue-count" class="badge {"badge-error" if count else "badge-ghost"}">{count}</span>'
     return HTMLResponse(badge)
+
+
+@app.get("/htmx/alerts/count", response_class=HTMLResponse)
+async def htmx_alerts_count(request: Request):
+    critical = count_open_alerts("critical")
+    total    = count_open_alerts()
+    cls = "badge-error" if critical else ("badge-warning" if total else "badge-ghost")
+    badge = f'<span id="alerts-count" class="badge {cls}">{total}</span>'
+    return HTMLResponse(badge)
+
+
+@app.get("/htmx/workflow/{workflow_id}/alerts", response_class=HTMLResponse)
+async def htmx_workflow_alerts(request: Request, workflow_id: str):
+    alerts = get_alerts_for_workflow(workflow_id)
+    open_alerts = [a for a in alerts if a["status"] in ("open", "acknowledged")]
+    return templates.TemplateResponse(request, "partials/workflow_alerts.html", {
+        "alerts": open_alerts,
+        "workflow_id": workflow_id,
+    })
 
 
 @app.get("/htmx/dashboard/stats", response_class=HTMLResponse)

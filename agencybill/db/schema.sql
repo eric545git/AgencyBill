@@ -297,3 +297,27 @@ CREATE TABLE IF NOT EXISTS notifications (
     sent_at     TEXT DEFAULT (datetime('now')),
     status      TEXT DEFAULT 'sent'
 );
+
+-- ─────────────────────────────────────────────
+-- ALERTS & EXCEPTIONS
+-- ─────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS alerts (
+    id              TEXT PRIMARY KEY,
+    alert_type      TEXT NOT NULL,
+    severity        TEXT NOT NULL CHECK(severity IN ('critical','warning','info')),
+    workflow_id     TEXT REFERENCES renewal_workflows(id),
+    entity_type     TEXT,               -- 'workflow','submission','invoice','quote','policy','claim'
+    entity_id       TEXT,
+    title           TEXT NOT NULL,
+    detail          TEXT,
+    status          TEXT NOT NULL DEFAULT 'open'
+        CHECK(status IN ('open','acknowledged','resolved','snoozed')),
+    dedup_key       TEXT UNIQUE,        -- prevents duplicate alerts for the same condition
+    created_at      TEXT DEFAULT (datetime('now')),
+    updated_at      TEXT DEFAULT (datetime('now')),
+    acknowledged_at TEXT,
+    acknowledged_by TEXT,
+    resolved_at     TEXT,
+    resolved_by     TEXT
+);

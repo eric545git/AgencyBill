@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Alerts & Exceptions · AgencyBill{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-4">
+  <div>
+    <h1 class="text-2xl font-bold">Alerts &amp; Exceptions</h1>
+    <p class="text-base-content/60 text-sm">Exception conditions requiring human follow-up</p>
+  </div>
+  <form method="get" action="/alerts">
+    <div class="flex gap-2">
+      <select name="severity" class="select select-bordered select-sm">
+        <option value="" {% if not filter_severity %}selected{% endif %}>All severities</option>
+        <option value="critical" {% if filter_severity == 'critical' %}selected{% endif %}>Critical only</option>
+        <option value="warning"  {% if filter_severity == 'warning'  %}selected{% endif %}>Warning only</option>
+        <option value="info"     {% if filter_severity == 'info'     %}selected{% endif %}>Info only</option>
+      </select>
+      <select name="status" class="select select-bordered select-sm">
+        <option value="open"         {% if filter_status == 'open' %}selected{% endif %}>Open</option>
+        <option value="acknowledged" {% if filter_status == 'acknowledged' %}selected{% endif %}>Acknowledged</option>
+        <option value="resolved"     {% if filter_status == 'resolved' %}selected{% endif %}>Resolved</option>
+      </select>
+      <button type="submit" class="btn btn-sm btn-ghost">Filter</button>
+    </div>
+  </form>
+</div>
+
+<!-- Summary strip -->
+<div class="stats shadow mb-6 w-full">
+  <div class="stat">
+    <div class="stat-title">Critical</div>
+    <div class="stat-value text-error">{{ critical_count }}</div>
+    <div class="stat-desc">Immediate action needed</div>
+  </div>
+  <div class="stat">
+    <div class="stat-title">Warning</div>
+    <div class="stat-value text-warning">{{ warning_count }}</div>
+    <div class="stat-desc">Follow-up required</div>
+  </div>
+  <div class="stat">
+    <div class="stat-title">Info</div>
+    <div class="stat-value">{{ info_count }}</div>
+    <div class="stat-desc">Situational awareness</div>
+  </div>
+</div>
+
+{% if not alerts %}
+<div class="alert alert-success">
+  <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+  </svg>
+  <span>No {{ filter_severity or '' }} {{ filter_status }} alerts — all clear.</span>
+</div>
+{% else %}
+<div class="flex flex-col gap-3">
+{% for a in alerts %}
+<div class="card bg-base-100 shadow border-l-4
+  {% if a.severity == 'critical' %}border-error
+  {% elif a.severity == 'warning' %}border-warning
+  {% else %}border-info{% endif %}">
+  <div class="card-body p-4">
+    <div class="flex items-start justify-between gap-4">
+      <div class="flex-1">
+        <!-- Header row -->
+        <div class="flex items-center gap-2 flex-wrap mb-1">
+          <span class="badge badge-sm font-semibold
+            {% if a.severity == 'critical' %}badge-error
+            {% elif a.severity == 'warning' %}badge-warning
+            {% else %}badge-info{% endif %}">
+            {{ a.severity | upper }}
+          </span>
+          <span class="badge badge-sm badge-ghost font-mono">{{ a.alert_type }}</span>
+          {% if a.status == 'acknowledged' %}
+          <span class="badge badge-sm badge-neutral">acknowledged</span>
+          {% endif %}
+          <span class="text-xs text-base-content/40">{{ a.created_at[:16] if a.created_at else '' }}</span>
+        </div>
+        <!-- Title -->
+        <div class="font-semibold text-base">{{ a.title }}</div>
+        <!-- Detail -->
+        <div class="text-sm text-base-content/70 mt-1">{{ a.detail }}</div>
+        <!-- Workflow link -->
+        {% if a.workflow_id %}
+        <div class="mt-2">
+          <a href="/workflows/{{ a.workflow_id }}" class="link link-primary text-xs">
+            View workflow →
+          </a>
+        </div>
+        {% endif %}
+      </div>
+      <!-- Actions -->
+      <div class="flex flex-col gap-1 shrink-0">
+        {% if a.status == 'open' %}
+        <form method="post" action="/alerts/{{ a.id }}/acknowledge">
+          <button class="btn btn-xs btn-ghost">Acknowledge</button>
+        </form>
+        {% endif %}
+        <form method="post" action="/alerts/{{ a.id }}/resolve">
+          <button class="btn btn-xs btn-outline btn-success">Resolve</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}

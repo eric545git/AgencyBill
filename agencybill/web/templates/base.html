@@ -12,8 +12,8 @@
     .phase-PRE_RENEWAL  { @apply badge-neutral; }
     .phase-APPLICATION  { @apply badge-info; }
     .phase-UNDERWRITING { @apply badge-warning; }
-    .phase-QUOTING      { @apply badge-accent; }
-    .phase-NEGOTIATION  { @apply badge-secondary; }
+    .phase-MARKET_SUBMISSION { @apply badge-accent; }
+    .phase-QUOTE_COLLECTION  { @apply badge-secondary; }
     .phase-BINDING      { @apply badge-primary; }
     .phase-INVOICING    { @apply badge-success; }
     .phase-REMITTANCE   { @apply badge-success; }
@@ -46,6 +46,14 @@
       <span id="queue-count"
             hx-get="/htmx/queue/count"
             hx-trigger="load, every 10s"
+            hx-swap="outerHTML">
+      </span>
+    </a>
+    <a href="/alerts" class="btn btn-ghost btn-sm {% if '/alerts' in request.url.path %}btn-active{% endif %}">
+      Alerts
+      <span id="alerts-count"
+            hx-get="/htmx/alerts/count"
+            hx-trigger="load, every 30s"
             hx-swap="outerHTML">
       </span>
     </a>

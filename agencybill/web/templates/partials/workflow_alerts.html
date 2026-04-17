@@ -1,0 +1,27 @@
+{% if alerts %}
+<div id="wf-alerts" class="flex flex-col gap-2">
+{% for a in alerts %}
+<div class="alert alert-sm border-l-4 py-2 px-3 rounded-lg
+  {% if a.severity == 'critical' %}alert-error border-error
+  {% elif a.severity == 'warning' %}alert-warning border-warning
+  {% else %}alert-info border-info{% endif %}">
+  <div class="flex items-start justify-between w-full gap-2">
+    <div>
+      <div class="font-semibold text-sm">{{ a.title }}</div>
+      <div class="text-xs opacity-80 mt-0.5">{{ a.detail[:160] }}{% if a.detail|length > 160 %}…{% endif %}</div>
+    </div>
+    <div class="flex gap-1 shrink-0">
+      {% if a.status == 'open' %}
+      <form method="post" action="/alerts/{{ a.id }}/acknowledge">
+        <button class="btn btn-xs btn-ghost">Ack</button>
+      </form>
+      {% endif %}
+      <form method="post" action="/alerts/{{ a.id }}/resolve">
+        <button class="btn btn-xs btn-outline">Resolve</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+</div>
+{% endif %}

@@ -33,6 +33,17 @@
   {% include "partials/workflow_status.html" %}
 </div>
 
+<!-- Active alerts for this workflow -->
+{% if wf_alerts %}
+<div id="wf-alerts-panel"
+     hx-get="/htmx/workflow/{{ wf.id }}/alerts"
+     hx-trigger="every 30s"
+     hx-swap="outerHTML"
+     class="flex flex-col gap-2 mb-4">
+  {% include "partials/workflow_alerts.html" with {"alerts": wf_alerts} %}
+</div>
+{% endif %}
+
 <!-- Pending checkpoint banner -->
 {% if pending_cp %}
 <div class="alert alert-warning mb-4">
