@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Approval Queue · AgencyBill{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+  <h1 class="text-2xl font-bold">Approval Queue</h1>
+  <p class="text-base-content/60 text-sm">
+    {% if checkpoints %}
+      {{ checkpoints|length }} item(s) waiting for your decision
+    {% else %}
+      No pending decisions — you're all clear.
+    {% endif %}
+  </p>
+</div>
+
+{% if checkpoints %}
+<div class="flex flex-col gap-4">
+{% for cp in checkpoints %}
+<div class="card bg-base-100 shadow border-l-4 border-warning">
+  <div class="card-body p-5">
+
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="badge badge-warning">{{ cp.phase }}</span>
+          <span class="text-sm font-semibold">{{ cp.firm_name }}</span>
+          <span class="text-xs font-mono text-base-content/50">{{ cp.policy_number }}</span>
+        </div>
+        <p class="text-base font-medium">{{ cp.prompt }}</p>
+        <p class="text-xs text-base-content/40 mt-1">
+          Raised {{ cp.created_at[:16] if cp.created_at else '—' }} ·
+          Workflow: <a href="/workflows/{{ cp.workflow_id }}" class="link">{{ cp.workflow_id | short_id }}</a>
+        </p>
+      </div>
+    </div>
+
+    <!-- Decision form -->
+    <form method="post" action="/queue/{{ cp.id }}/decide" class="mt-4">
+      <div class="flex flex-wrap gap-2 mb-3">
+        {% for opt in cp.options %}
+        <label class="cursor-pointer">
+          <input type="radio" name="decision" value="{{ opt }}" class="sr-only peer" required />
+          <span class="btn btn-sm peer-checked:btn-primary btn-outline">{{ opt }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <div class="flex gap-2 items-center">
+        <input type="text" name="notes" placeholder="Optional notes…"
+               class="input input-bordered input-sm flex-1 max-w-sm" />
+        <button type="submit" class="btn btn-primary btn-sm">Submit Decision</button>
+      </div>
+    </form>
+
+  </div>
+</div>
+{% endfor %}
+</div>
+
+{% else %}
+<div class="card bg-base-100 shadow">
+  <div class="card-body text-center py-16">
+    <div class="text-5xl mb-4">✓</div>
+    <h2 class="text-xl font-semibold">Queue is empty</h2>
+    <p class="text-base-content/50">No workflows are waiting for a human decision right now.</p>
+    <div class="mt-4">
+      <a href="/workflows" class="btn btn-ghost">View Workflows</a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Auto-refresh the page if there are items (agents may resolve and add new ones) -->
+{% if checkpoints %}
+<div hx-trigger="every 10s" hx-get="/queue" hx-target="body" hx-push-url="false" hx-swap="innerHTML"></div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · AgencyBill{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+  <h1 class="text-2xl font-bold">Dashboard</h1>
+  <p class="text-base-content/60 text-sm">Agency Bill Renewal — LPL Portfolio Overview</p>
+</div>
+
+<!-- Stats row — auto-refreshes every 15s -->
+<div id="stats-row"
+     hx-get="/htmx/dashboard/stats"
+     hx-trigger="load, every 15s"
+     hx-swap="outerHTML">
+  {% include "partials/dashboard_stats.html" %}
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+
+  <!-- Active Workflows -->
+  <div class="lg:col-span-2">
+    <div class="card bg-base-100 shadow">
+      <div class="card-body p-0">
+        <div class="flex items-center justify-between px-5 pt-5 pb-3 border-b border-base-200">
+          <h2 class="card-title text-base">Active Workflows</h2>
+          <a href="/workflows" class="btn btn-xs btn-ghost">View all →</a>
+        </div>
+        {% if active %}
+        <div class="overflow-x-auto">
+          <table class="table table-sm table-zebra">
+            <thead>
+              <tr class="text-xs text-base-content/50">
+                <th>Firm</th><th>Policy</th><th>Phase</th><th>Progress</th><th>Running</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+            {% for w in active %}
+            <tr class="hover">
+              <td class="font-medium">{{ w.firm_name }}</td>
+              <td class="font-mono text-xs">{{ w.policy_number }}</td>
+              <td>
+                <span class="phase-pill phase-{{ w.phase }}">{{ w.phase | replace('_',' ') }}</span>
+              </td>
+              <td class="w-28">
+                <progress class="progress progress-primary w-full" value="{{ w.phase | phase_pct }}" max="100"></progress>
+              </td>
+              <td class="text-center">
+                {% if w.id in running_ids %}
+                  <span class="loading loading-dots loading-xs text-primary"></span>
+                {% else %}
+                  <span class="text-base-content/30">—</span>
+                {% endif %}
+              </td>
+              <td><a href="/workflows/{{ w.id }}" class="btn btn-xs btn-ghost">Detail</a></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="p-6 text-center text-base-content/40">
+          No active workflows. <a href="/policies" class="link link-primary">Start one from the policies page.</a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="flex flex-col gap-4">
+
+    <!-- Approval Queue -->
+    <div class="card bg-base-100 shadow">
+      <div class="card-body p-0">
+        <div class="flex items-center justify-between px-5 pt-5 pb-3 border-b border-base-200">
+          <h2 class="card-title text-base">
+            Pending Approvals
+            {% if queue %}
+            <span class="badge badge-error badge-sm">{{ queue|length }}</span>
+            {% endif %}
+          </h2>
+          <a href="/queue" class="btn btn-xs btn-ghost">Queue →</a>
+        </div>
+        {% if queue %}
+        <ul class="divide-y divide-base-200">
+          {% for cp in queue[:5] %}
+          <li class="px-5 py-3">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <p class="font-medium text-sm">{{ cp.firm_name }}</p>
+                <p class="text-xs text-base-content/50">{{ cp.phase }} — {{ cp.prompt[:60] }}{% if cp.prompt|length > 60 %}…{% endif %}</p>
+              </div>
+              <a href="/queue" class="btn btn-xs btn-warning shrink-0">Decide</a>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <div class="p-5 text-center text-base-content/40 text-sm">No pending approvals</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Expiring Soon -->
+    <div class="card bg-base-100 shadow">
+      <div class="card-body p-0">
+        <div class="flex items-center justify-between px-5 pt-5 pb-3 border-b border-base-200">
+          <h2 class="card-title text-base">Expiring in 90 Days</h2>
+          <a href="/policies" class="btn btn-xs btn-ghost">All →</a>
+        </div>
+        {% if expiring %}
+        <ul class="divide-y divide-base-200">
+          {% for p in expiring[:5] %}
+          <li class="px-5 py-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="font-medium text-sm">{{ p.firm_name }}</p>
+                <p class="text-xs text-base-content/50 font-mono">{{ p.expiration_date }}</p>
+              </div>
+              <form method="post" action="/workflows/start">
+                <input type="hidden" name="policy_id" value="{{ p.id }}" />
+                <button class="btn btn-xs btn-primary">Renew</button>
+              </form>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <div class="p-5 text-center text-base-content/40 text-sm">No policies expiring soon</div>
+        {% endif %}
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Recent terminal workflows -->
+{% if terminal %}
+<div class="card bg-base-100 shadow mt-6">
+  <div class="card-body p-0">
+    <div class="px-5 pt-5 pb-3 border-b border-base-200">
+      <h2 class="card-title text-base">Non-Renewals & Cancellations</h2>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead><tr class="text-xs text-base-content/50">
+          <th>Firm</th><th>Policy</th><th>Status</th><th>Updated</th><th></th>
+        </tr></thead>
+        <tbody>
+        {% for w in terminal %}
+        <tr>
+          <td>{{ w.firm_name }}</td>
+          <td class="font-mono text-xs">{{ w.policy_number }}</td>
+          <td><span class="badge badge-error badge-sm">{{ w.status | upper }}</span></td>
+          <td class="text-xs text-base-content/50">{{ w.updated_at[:16] if w.updated_at else '—' }}</td>
+          <td><a href="/workflows/{{ w.id }}" class="btn btn-xs btn-ghost">Detail</a></td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

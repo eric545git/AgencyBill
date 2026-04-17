@@ -269,5 +269,34 @@ def policies():
     print_info(f"{len(data)} policy(ies).")
 
 
+# ─────────────────────────────────────────────
+# web
+# ─────────────────────────────────────────────
+
+@cli.command()
+@click.option("--host", default="127.0.0.1", show_default=True, help="Bind host")
+@click.option("--port", default=8000, show_default=True, help="Bind port")
+@click.option("--reload", is_flag=True, default=False, help="Auto-reload on file changes")
+def web(host: str, port: int, reload: bool):
+    """Start the AgencyBill web interface."""
+    try:
+        import uvicorn
+    except ImportError:
+        print_error("uvicorn not installed. Run: pip install uvicorn[standard]")
+        sys.exit(1)
+
+    print_header("AgencyBill Web Interface")
+    print_info(f"Starting server at http://{host}:{port}")
+    print_info("Press Ctrl+C to stop.")
+
+    uvicorn.run(
+        "agencybill.web.app:app",
+        host=host,
+        port=port,
+        reload=reload,
+        log_level="warning",
+    )
+
+
 if __name__ == "__main__":
     cli()

@@ -63,11 +63,13 @@ CHECKPOINTS_AFTER = {
 class WorkflowOrchestrator:
     """Drives the full 8-phase LPL agency bill renewal workflow."""
 
-    def __init__(self, workflow_id: str, policy_id: str, auto_mode: bool = False):
+    def __init__(self, workflow_id: str, policy_id: str,
+                 auto_mode: bool = False, web_mode: bool = False):
         self.workflow_id = workflow_id
         self.policy_id = policy_id
-        self.auto_mode = auto_mode  # skip HITL if True
-        self.checkpoint = HumanCheckpoint(workflow_id)
+        self.auto_mode = auto_mode
+        self.web_mode = web_mode
+        self.checkpoint = HumanCheckpoint(workflow_id, web_mode=web_mode)
 
     def run(self) -> None:
         """Execute the workflow from current phase to completion."""

@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Policies · AgencyBill{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-bold">Policies</h1>
+    <p class="text-base-content/60 text-sm">{{ policies|length }} LPL policy(ies)</p>
+  </div>
+</div>
+
+<div class="card bg-base-100 shadow">
+  <div class="overflow-x-auto">
+    <table class="table table-zebra">
+      <thead>
+        <tr class="text-xs text-base-content/50">
+          <th>Firm</th>
+          <th>Policy #</th>
+          <th>Carrier</th>
+          <th>State</th>
+          <th>Attorneys</th>
+          <th>Limits</th>
+          <th>Premium</th>
+          <th>Expires</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for p in policies %}
+      {% set expired = p.expiration_date and p.expiration_date < today %}
+      {% set expiring_soon = p.expiration_date and p.expiration_date <= in_90 and not expired %}
+      <tr class="hover {% if expired %}opacity-60{% endif %}">
+        <td class="font-medium">{{ p.firm_name }}</td>
+        <td class="font-mono text-xs">{{ p.policy_number }}</td>
+        <td class="text-sm">{{ p.carrier }}</td>
+        <td class="text-sm">{{ p.firm_state }}</td>
+        <td class="text-sm text-center">{{ p.attorney_count or '—' }}</td>
+        <td class="text-xs whitespace-nowrap">
+          {{ p.limit_per_claim | currency }} / {{ p.aggregate_limit | currency }}
+        </td>
+        <td class="font-semibold text-sm">{{ p.annual_premium | currency }}</td>
+        <td class="text-sm font-mono">
+          <span class="{% if expiring_soon %}text-warning font-semibold{% elif expired %}text-error{% endif %}">
+            {{ p.expiration_date[:10] if p.expiration_date else '—' }}
+          </span>
+          {% if expiring_soon %}<span class="badge badge-warning badge-xs ml-1">soon</span>{% endif %}
+          {% if expired %}<span class="badge badge-error badge-xs ml-1">expired</span>{% endif %}
+        </td>
+        <td>
+          <span class="badge badge-sm {% if p.status == 'active' %}badge-success{% else %}badge-ghost{% endif %}">
+            {{ p.status }}
+          </span>
+        </td>
+        <td>
+          {% if p.status == 'active' %}
+          <form method="post" action="/workflows/start">
+            <input type="hidden" name="policy_id" value="{{ p.id }}" />
+            <button class="btn btn-xs btn-primary">Renew</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="10" class="text-center py-8 text-base-content/40">
+        No policies found. Run <code>agencybill seed</code> to load sample data.
+      </td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

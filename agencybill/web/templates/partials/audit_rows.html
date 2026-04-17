@@ -1,0 +1,18 @@
+<tbody id="audit-tbody">
+{% for e in events | reverse %}
+<tr class="hover text-xs">
+  <td class="text-base-content/50 whitespace-nowrap font-mono">{{ e.created_at[:19] if e.created_at else '—' }}</td>
+  <td>
+    <span class="badge badge-ghost badge-sm font-mono">{{ e.agent_name or '—' }}</span>
+  </td>
+  <td class="font-medium">{{ e.action }}</td>
+  <td class="text-base-content/60 max-w-xs truncate">
+    {% if e.get('details') %}
+      {{ e.details | string | truncate(80) }}
+    {% endif %}
+  </td>
+</tr>
+{% else %}
+<tr><td colspan="4" class="text-center text-base-content/40 py-4">No audit events yet</td></tr>
+{% endfor %}
+</tbody>

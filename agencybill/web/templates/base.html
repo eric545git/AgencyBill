@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}AgencyBill{% endblock %}</title>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.10.1/dist/full.min.css" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"></script>
+  <style>
+    .phase-pill { @apply badge badge-sm font-mono; }
+    .phase-PRE_RENEWAL  { @apply badge-neutral; }
+    .phase-APPLICATION  { @apply badge-info; }
+    .phase-UNDERWRITING { @apply badge-warning; }
+    .phase-QUOTING      { @apply badge-accent; }
+    .phase-NEGOTIATION  { @apply badge-secondary; }
+    .phase-BINDING      { @apply badge-primary; }
+    .phase-INVOICING    { @apply badge-success; }
+    .phase-REMITTANCE   { @apply badge-success; }
+    .phase-COMPLETE     { @apply badge-success; }
+    .phase-NON_RENEWAL  { @apply badge-error; }
+    .phase-DECLINED     { @apply badge-error; }
+    .status-active    { @apply text-blue-600; }
+    .status-complete  { @apply text-green-600; }
+    .status-paused    { @apply text-yellow-600; }
+    .status-non_renewal,.status-declined,.status-cancelled { @apply text-red-600; }
+    [x-cloak] { display: none !important; }
+  </style>
+</head>
+<body class="bg-base-200 min-h-screen">
+
+<!-- Navbar -->
+<nav class="navbar bg-base-100 shadow-sm px-6 sticky top-0 z-50">
+  <div class="flex-1">
+    <a href="/" class="text-xl font-bold text-primary tracking-tight">
+      ⚖ AgencyBill
+    </a>
+    <span class="ml-3 text-xs text-base-content/50 hidden sm:inline">LPL Agency Bill Renewal</span>
+  </div>
+  <div class="flex-none gap-2">
+    <a href="/" class="btn btn-ghost btn-sm {% if request.url.path == '/' %}btn-active{% endif %}">Dashboard</a>
+    <a href="/workflows" class="btn btn-ghost btn-sm {% if '/workflows' in request.url.path and request.url.path != '/workflows/start' %}btn-active{% endif %}">Workflows</a>
+    <a href="/policies" class="btn btn-ghost btn-sm {% if '/policies' in request.url.path %}btn-active{% endif %}">Policies</a>
+    <a href="/queue" class="btn btn-ghost btn-sm {% if '/queue' in request.url.path %}btn-active{% endif %}">
+      Queue
+      <span id="queue-count"
+            hx-get="/htmx/queue/count"
+            hx-trigger="load, every 10s"
+            hx-swap="outerHTML">
+      </span>
+    </a>
+  </div>
+</nav>
+
+<!-- Flash / content -->
+<main class="container mx-auto px-4 py-6 max-w-7xl">
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="footer footer-center p-4 bg-base-100 text-base-content/40 text-xs mt-8">
+  <p>AgencyBill · Agentic LPL Renewal · Powered by Claude claude-sonnet-4-6</p>
+</footer>
+
+</body>
+</html>

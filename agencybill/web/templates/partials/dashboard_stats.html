@@ -1,0 +1,22 @@
+<div id="stats-row" class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">Active Workflows</div>
+    <div class="stat-value text-primary">{{ active }}</div>
+    <div class="stat-desc">In progress</div>
+  </div>
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">Pending Approvals</div>
+    <div class="stat-value {% if queue %}text-error{% else %}text-base-content{% endif %}">{{ queue }}</div>
+    <div class="stat-desc">Need your decision</div>
+  </div>
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">Completed</div>
+    <div class="stat-value text-success">{{ complete }}</div>
+    <div class="stat-desc">Renewals done</div>
+  </div>
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">Expiring Soon</div>
+    <div class="stat-value {% if expiring %}text-warning{% else %}text-base-content{% endif %}">{{ expiring }}</div>
+    <div class="stat-desc">Within 90 days</div>
+  </div>
+</div>

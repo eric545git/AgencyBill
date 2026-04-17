@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Workflows · AgencyBill{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-bold">Renewal Workflows</h1>
+    <p class="text-base-content/60 text-sm">{{ workflows|length }} workflow(s)</p>
+  </div>
+  <div class="flex gap-2">
+    {% for s in ['', 'active', 'paused', 'complete', 'non_renewal', 'declined'] %}
+    <a href="/workflows{% if s %}?status={{ s }}{% endif %}"
+       class="btn btn-sm {% if filter_status == s %}btn-primary{% else %}btn-ghost{% endif %}">
+      {{ s if s else 'All' }}
+    </a>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card bg-base-100 shadow">
+  <div class="overflow-x-auto">
+    <table class="table table-zebra">
+      <thead>
+        <tr class="text-xs text-base-content/50">
+          <th>Firm</th>
+          <th>Policy #</th>
+          <th>State</th>
+          <th>Expiration</th>
+          <th>Phase</th>
+          <th>Progress</th>
+          <th>Status</th>
+          <th>Running</th>
+          <th>Updated</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for w in workflows %}
+      <tr class="hover">
+        <td class="font-medium">{{ w.firm_name }}</td>
+        <td class="font-mono text-xs">{{ w.policy_number }}</td>
+        <td class="text-sm">{{ w.firm_state }}</td>
+        <td class="text-sm font-mono">{{ w.expiration_date[:10] if w.expiration_date else '—' }}</td>
+        <td>
+          <span class="phase-pill phase-{{ w.phase }}">{{ w.phase | replace('_',' ') }}</span>
+        </td>
+        <td class="w-24">
+          <progress class="progress progress-primary w-full" value="{{ w.phase | phase_pct }}" max="100"></progress>
+        </td>
+        <td>
+          <span class="text-sm status-{{ w.status }} font-medium">{{ w.status }}</span>
+        </td>
+        <td class="text-center">
+          {% if w.id in running_ids %}
+          <span class="loading loading-dots loading-xs text-primary"></span>
+          {% else %}
+          <span class="text-base-content/20">·</span>
+          {% endif %}
+        </td>
+        <td class="text-xs text-base-content/50">{{ w.updated_at[:16] if w.updated_at else '—' }}</td>
+        <td>
+          <a href="/workflows/{{ w.id }}" class="btn btn-xs btn-ghost">Detail</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="10" class="text-center py-8 text-base-content/40">
+        No workflows found.
+        {% if not filter_status %}
+          <a href="/policies" class="link link-primary">Start one from the Policies page.</a>
+        {% endif %}
+      </td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
