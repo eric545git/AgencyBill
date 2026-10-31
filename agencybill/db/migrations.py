@@ -40,6 +40,40 @@ MIGRATIONS: list[tuple[int, str, list[str]]] = [
             "CREATE INDEX IF NOT EXISTS idx_quotes_workflow ON quotes(workflow_id)",
         ],
     ),
+    (
+        2,
+        "app_settings for operator-managed secrets such as the OpenRouter API key",
+        [
+            """CREATE TABLE IF NOT EXISTS app_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT DEFAULT (datetime('now'))
+            )""",
+        ],
+    ),
+    (
+        3,
+        "SendGrid delivery columns and inbound email",
+        [
+            "ALTER TABLE notifications ADD COLUMN provider TEXT",
+            "ALTER TABLE notifications ADD COLUMN provider_message_id TEXT",
+            "ALTER TABLE notifications ADD COLUMN error TEXT",
+            "CREATE INDEX IF NOT EXISTS idx_notifications_workflow ON notifications(workflow_id)",
+            """CREATE TABLE IF NOT EXISTS inbound_emails (
+                id TEXT PRIMARY KEY,
+                workflow_id TEXT,
+                from_address TEXT,
+                to_address TEXT,
+                subject TEXT,
+                text_body TEXT,
+                html_body TEXT,
+                message_headers TEXT,
+                attachment_count INTEGER DEFAULT 0,
+                received_at TEXT DEFAULT (datetime('now'))
+            )""",
+            "CREATE INDEX IF NOT EXISTS idx_inbound_workflow ON inbound_emails(workflow_id)",
+        ],
+    ),
 ]
 
 

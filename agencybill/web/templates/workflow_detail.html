@@ -374,8 +374,24 @@
           <li class="text-xs flex gap-2">
             <span class="text-base-content/40 font-mono">{{ n.sent_at[:16] if n.sent_at else '' }}</span>
             <span class="badge badge-xs badge-ghost">{{ n.channel }}</span>
+            <span class="badge badge-xs {% if n.status == 'sent' %}badge-success{% elif n.status == 'failed' %}badge-error{% else %}badge-ghost{% endif %}">{{ n.status }}</span>
             <span class="text-base-content/60">→ {{ n.recipient }}</span>
             <span class="font-medium truncate max-w-xs">{{ n.subject }}</span>
+          </li>
+          {% endfor %}
+          </ul>
+        </div>
+        {% endif %}
+
+        {% if inbound_emails %}
+        <div class="border-t border-base-200 px-5 py-3">
+          <h3 class="text-xs font-semibold text-base-content/50 mb-2">Mail received</h3>
+          <ul class="space-y-1">
+          {% for email in inbound_emails %}
+          <li class="text-xs flex gap-2">
+            <span class="text-base-content/40 font-mono">{{ email.received_at[:16] if email.received_at else '' }}</span>
+            <span class="text-base-content/60">{{ email.from_address }}</span>
+            <span class="font-medium truncate max-w-xs">{{ email.subject }}</span>
           </li>
           {% endfor %}
           </ul>

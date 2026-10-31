@@ -1,4 +1,9 @@
-"""BaseAgent: agentic tool-use loop using the Anthropic SDK."""
+"""BaseAgent: agentic tool-use loop using the Anthropic Messages API.
+
+Calls go to Anthropic directly, or to OpenRouter when an OpenRouter key is
+configured. A key saved on the web Admin page overrides OPENROUTER_API_KEY.
+OpenRouter speaks the same Messages API, so every agent uses one client path.
+"""
 
 import json
 import time
@@ -6,7 +11,7 @@ from typing import Any, Callable
 
 import anthropic
 
-from agencybill.config import ANTHROPIC_API_KEY, MODEL, MAX_AGENT_TURNS
+from agencybill.config import MAX_AGENT_TURNS, resolve_llm_settings
 from agencybill.tools.audit_tools import log_audit_event
 from agencybill.display.console import console, print_agent_action, print_tool_call
 from agencybill.logging_config import get_logger
@@ -27,12 +32,20 @@ class BaseAgent:
     system_prompt: str = "You are a helpful insurance workflow assistant."
 
     def __init__(self, workflow_id: str):
-        if not ANTHROPIC_API_KEY:
+        settings = resolve_llm_settings()
+        if not settings.configured:
             raise RuntimeError(
-                "ANTHROPIC_API_KEY is not set. Copy .env.example to .env and add your key."
+                "No LLM API key is set. Set OPENROUTER_API_KEY or ANTHROPIC_API_KEY "
+                "in .env, or save an OpenRouter key on the web Admin page. "
+                "A saved key overrides OPENROUTER_API_KEY and routes every agent call through OpenRouter."
             )
         self.workflow_id = workflow_id
-        self.client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        self.llm = settings
+        client_kwargs: dict[str, Any] = {"api_key": settings.api_key}
+        if settings.base_url:
+            client_kwargs["base_url"] = settings.base_url
+        self.client = anthropic.Anthropic(**client_kwargs)
+        log.info("LLM provider=%s model=%s", settings.provider, settings.model)
         self.tools: list[dict] = []
         self.tool_handlers: dict[str, Callable] = {}
         self._register_tools()
@@ -73,12 +86,13 @@ class BaseAgent:
             return {"error": str(exc)}
 
     def _create_message(self, messages: list) -> Any:
-        """Call Anthropic with retries on rate limits and transient errors."""
+        """Call the configured LLM with retries on rate limits and transient errors."""
         last_exc: Exception | None = None
+        provider = self.llm.provider
         for attempt in range(_MAX_RETRIES):
             try:
                 return self.client.messages.create(
-                    model=MODEL,
+                    model=self.llm.model,
                     max_tokens=4096,
                     system=self.system_prompt,
                     tools=self.tools,
@@ -89,8 +103,8 @@ class BaseAgent:
                 last_exc = exc
                 delay = _RETRY_BASE_SECONDS * (2 ** attempt)
                 log.warning(
-                    "Anthropic call failed (attempt %s/%s): %s — retrying in %.1fs",
-                    attempt + 1, _MAX_RETRIES, exc, delay,
+                    "%s call failed (attempt %s/%s): %s — retrying in %.1fs",
+                    provider, attempt + 1, _MAX_RETRIES, exc, delay,
                 )
                 time.sleep(delay)
             except anthropic.APIStatusError as exc:
@@ -98,13 +112,13 @@ class BaseAgent:
                     last_exc = exc
                     delay = _RETRY_BASE_SECONDS * (2 ** attempt)
                     log.warning(
-                        "Anthropic 5xx (attempt %s/%s): %s — retrying in %.1fs",
-                        attempt + 1, _MAX_RETRIES, exc, delay,
+                        "%s 5xx (attempt %s/%s): %s — retrying in %.1fs",
+                        provider, attempt + 1, _MAX_RETRIES, exc, delay,
                     )
                     time.sleep(delay)
                     continue
                 raise
-        raise RuntimeError(f"Anthropic API failed after {_MAX_RETRIES} retries: {last_exc}")
+        raise RuntimeError(f"{provider} API failed after {_MAX_RETRIES} retries: {last_exc}")
 
     def run(self, initial_message: str) -> str:
         """

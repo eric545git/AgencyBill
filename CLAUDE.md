@@ -10,7 +10,7 @@ AgencyBill automates LPL (Lawyers Professional Liability) insurance renewals usi
 
 ```bash
 pip install -e .
-cp .env.example .env        # add ANTHROPIC_API_KEY
+cp .env.example .env        # add ANTHROPIC_API_KEY or OPENROUTER_API_KEY
 agencybill seed             # load sample data
 agencybill web              # start web UI at http://127.0.0.1:8000
 agencybill start --policy-id pol-001 --auto   # CLI, no HITL prompts
@@ -66,7 +66,7 @@ Schema is in `agencybill/db/schema.sql` and applied via `init_db()` on startup. 
 
 ### Notification System
 
-`send_notification()` writes to the `notifications` table — it does **not** actually send email. In a production deployment this would call an email API. Agents use it to simulate outbound communications.
+`send_notification()` writes to the `notifications` table. When `SENDGRID_API_KEY` and `SENDGRID_FROM_EMAIL` are set (environment or the Admin page), email notifications are delivered through SendGrid. Otherwise the row is stored with status `logged`. SendGrid Inbound Parse posts to `/webhooks/sendgrid/inbound`; received messages are stored in `inbound_emails` and shown on `/mail`. A reply-to plus-address `renewals+{workflow_id}@{SENDGRID_INBOUND_DOMAIN}` links replies back to the workflow.
 
 ## File Map
 
@@ -135,20 +135,27 @@ The `dedup_key` format is `"alert_type:entity_id"`. Never include timestamps in 
 
 | Variable | Default | Notes |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | required | No fallback |
-| `AGENCYBILL_MODEL` | `claude-sonnet-4-6` | Change to `claude-opus-4-7` for more capable agents |
+| `ANTHROPIC_API_KEY` | — | Direct Anthropic key. Used when `OPENROUTER_API_KEY` is empty |
+| `OPENROUTER_API_KEY` | — | Fallback OpenRouter key. The web Admin page (`/admin`) can save a key that overrides this variable; clearing the saved key falls back here. A non-empty effective key sends every agent LLM call through OpenRouter |
+| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api` | Anthropic Messages-compatible OpenRouter base URL |
+| `AGENCYBILL_MODEL` | `claude-sonnet-4-6` | Fallback model id. The Admin page (`/admin`) can save a model that overrides this; clearing it falls back here. Dashed ids map to `anthropic/claude-sonnet-4.6` on OpenRouter |
 | `AGENCYBILL_DB_PATH` | `data/agencybill.db` | Relative to project root |
 | `AGENCYBILL_OUTPUT_DIR` | `output` | Relative to project root |
 | `AGENCYBILL_MAX_AGENT_TURNS` | `20` | Increase if complex accounts run out of turns |
 | `AGENCYBILL_COMMISSION_PCT` | `0.15` | Default broker commission if broker has no override |
 | `AGENCYBILL_WEB_USER` | `agencybill` | HTTP Basic Auth username for the web UI |
+| `SENDGRID_API_KEY` | — | SendGrid mail key. Admin page can override it |
+| `SENDGRID_FROM_EMAIL` | — | Verified sender. Required together with the API key to send |
+| `SENDGRID_FROM_NAME` | `AgencyBill` | From display name |
+| `SENDGRID_INBOUND_DOMAIN` | — | Domain on SendGrid Inbound Parse. Enables reply-to plus addressing |
+| `SENDGRID_INBOUND_TOKEN` | — | When set, the inbound webhook requires this token |
 | `AGENCYBILL_WEB_PASSWORD` | _(empty)_ | Set to enable web auth; leave empty only for local demo |
 
 ## Common Issues
 
 **`ModuleNotFoundError: agencybill`** — Run `pip install -e .` from the project root.
 
-**`ANTHROPIC_API_KEY` not found** — Ensure `.env` exists and has the key. `config.py` calls `load_dotenv()` which reads `.env` relative to the working directory.
+**No LLM API key** — Set `OPENROUTER_API_KEY` or `ANTHROPIC_API_KEY` in `.env`, or save an OpenRouter key on the web Admin page (`/admin`). `config.py` calls `load_dotenv()` which reads `.env` relative to the working directory. A saved key overrides `OPENROUTER_API_KEY`. A non-empty effective OpenRouter key routes every agent call through OpenRouter.
 
 **Workflow stuck at a HITL checkpoint in web mode** — Navigate to `/queue` in the browser and submit a decision. The background thread polls the DB and will resume within 2 seconds.
 

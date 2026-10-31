@@ -12,8 +12,18 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from agencybill.config import PHASES, WEB_PASSWORD, WEB_USER, phase_pct
+import agencybill.config as cfg
+from agencybill.config import PHASES, WEB_PASSWORD, WEB_USER, llm_footer_label, phase_pct
 from agencybill.database import init_db, db, row_to_dict
+from agencybill.settings_store import (
+    clear_model,
+    clear_openrouter_api_key,
+    get_model_override,
+    get_openrouter_api_key_override,
+    mask_api_key,
+    set_model,
+    set_openrouter_api_key,
+)
 from agencybill.logging_config import get_logger
 from agencybill.tools.policy_tools import (
     read_policy, list_expiring_policies, list_workflows,
@@ -23,6 +33,13 @@ from agencybill.tools.audit_tools import (
     get_audit_trail, get_checkpoints, resolve_checkpoint,
 )
 from agencybill.tools.payment_tools import get_invoices_for_workflow, get_remittances
+from agencybill.email.sendgrid import (
+    clear_sendgrid_settings,
+    list_inbound_emails,
+    load_sendgrid_config,
+    save_sendgrid_settings,
+    store_inbound,
+)
 from agencybill.tools.notification_tools import get_notifications
 from agencybill.tools.market_tools import (
     get_submissions, get_market_quotes, record_market_quote,
@@ -102,6 +119,7 @@ templates.env.filters["short_id"] = _short_id
 templates.env.filters["phase_pct"] = phase_pct
 templates.env.globals["now"] = lambda: datetime.now().strftime("%H:%M:%S")
 templates.env.globals["PHASES"] = PHASES
+templates.env.globals["llm_footer_label"] = llm_footer_label
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -164,6 +182,7 @@ async def workflow_detail(request: Request, workflow_id: str, _user=Depends(_req
     invoices  = get_invoices_for_workflow(workflow_id)
     remits    = get_remittances(workflow_id)
     notifs    = get_notifications(workflow_id)
+    inbound   = list_inbound_emails(workflow_id)
     wf_events = _workflow_events(workflow_id)
     quotes    = _get_quotes(workflow_id)
     submissions   = get_submissions(workflow_id)
@@ -188,6 +207,7 @@ async def workflow_detail(request: Request, workflow_id: str, _user=Depends(_req
         "invoices": invoices,
         "remittances": remits,
         "notifications": notifs,
+        "inbound_emails": inbound,
         "wf_events": wf_events,
         "quotes": quotes,
         "submissions": submissions,
@@ -366,6 +386,234 @@ async def ack_alert(alert_id: str, _user=Depends(_require_auth)):
 async def res_alert(alert_id: str, _user=Depends(_require_auth)):
     resolve_alert(alert_id)
     return RedirectResponse("/alerts", status_code=303)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ADMIN — OpenRouter API key
+# ─────────────────────────────────────────────────────────────────────────────
+
+_ADMIN_NOTICES = {
+    "saved": "OpenRouter key saved. It overrides OPENROUTER_API_KEY for every agent call.",
+    "cleared": "Saved OpenRouter key cleared. Routing falls back to the environment variable.",
+    "model_saved": "Model saved. It overrides AGENCYBILL_MODEL for every agent call.",
+    "model_cleared": "Saved model cleared. Calls fall back to AGENCYBILL_MODEL.",
+    "sendgrid_saved": "SendGrid settings saved. A saved value overrides the matching environment variable.",
+    "sendgrid_cleared": "Saved SendGrid settings cleared. Mail falls back to the environment variables.",
+}
+_BLANK_KEY_ERROR = "Enter an OpenRouter API key to save it. Use Clear to remove a saved key."
+_MODEL_ERRORS = {
+    "blank": "Enter a model id to save it. Use Clear to fall back to AGENCYBILL_MODEL.",
+    "spaces": "Model id cannot contain spaces.",
+    "long": "Model id is too long.",
+}
+
+
+def _admin_context(notice: str = "", error: str = "") -> dict:
+    """Template fields for /admin. The raw API key is never included."""
+    saved = get_openrouter_api_key_override()
+    saved_model = get_model_override()
+    env_key = (cfg.OPENROUTER_API_KEY or "").strip()
+    env_model = (cfg.MODEL or "").strip() or "claude-sonnet-4-6"
+    settings = cfg.resolve_llm_settings()
+    sendgrid = load_sendgrid_config()
+    if settings.provider == "openrouter":
+        provider_label = "OpenRouter"
+    elif settings.provider == "anthropic":
+        provider_label = "Anthropic"
+    else:
+        provider_label = "Not configured"
+    if saved:
+        source_label = "Saved key (overrides the environment variable)"
+    elif settings.provider == "openrouter":
+        source_label = "Environment variable OPENROUTER_API_KEY"
+    elif settings.provider == "anthropic":
+        source_label = "Environment variable ANTHROPIC_API_KEY"
+    else:
+        source_label = "No key configured"
+    return {
+        "saved_hint": mask_api_key(saved),
+        "env_hint": mask_api_key(env_key),
+        "provider": settings.provider,
+        "provider_label": provider_label,
+        "model": settings.model,
+        "configured_model": saved_model or env_model,
+        "env_model": env_model,
+        "model_source_label": (
+            "Saved model (overrides AGENCYBILL_MODEL)"
+            if saved_model
+            else "Environment variable AGENCYBILL_MODEL"
+        ),
+        "source_label": source_label,
+        "notice": _ADMIN_NOTICES.get(notice, ""),
+        "error": error,
+        "has_saved_key": bool(saved),
+        "has_saved_model": bool(saved_model),
+        "sendgrid_can_send": sendgrid.can_send,
+        "sendgrid_from_email": sendgrid.from_email,
+        "sendgrid_from_name": sendgrid.from_name,
+        "sendgrid_inbound_domain": sendgrid.inbound_domain,
+        "sendgrid_key_hint": mask_api_key(sendgrid.api_key),
+        "sendgrid_token_hint": mask_api_key(sendgrid.inbound_token),
+        "sendgrid_webhook_open": not bool(sendgrid.inbound_token),
+    }
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_view(request: Request, notice: str = "", _user=Depends(_require_auth)):
+    return templates.TemplateResponse(request, "admin.html", _admin_context(notice=notice))
+
+
+@app.post("/admin/openrouter-key", response_class=HTMLResponse)
+async def admin_save_openrouter_key(
+    request: Request,
+    openrouter_api_key: str = Form(""),
+    _user=Depends(_require_auth),
+):
+    try:
+        set_openrouter_api_key(openrouter_api_key)
+    except ValueError as exc:
+        # ValueError text is a fixed message and does not include the key.
+        log.info("Rejected OpenRouter API key save: %s", exc)
+        error = _BLANK_KEY_ERROR if "blank" in str(exc).lower() else str(exc)
+        return templates.TemplateResponse(
+            request,
+            "admin.html",
+            _admin_context(error=error),
+            status_code=400,
+        )
+    log.info("OpenRouter API key saved from the admin page")
+    return RedirectResponse("/admin?notice=saved", status_code=303)
+
+
+@app.post("/admin/openrouter-key/clear")
+async def admin_clear_openrouter_key(_user=Depends(_require_auth)):
+    clear_openrouter_api_key()
+    log.info("Saved OpenRouter API key cleared from the admin page")
+    return RedirectResponse("/admin?notice=cleared", status_code=303)
+
+
+@app.post("/admin/model", response_class=HTMLResponse)
+async def admin_save_model(
+    request: Request,
+    model: str = Form(""),
+    _user=Depends(_require_auth),
+):
+    try:
+        set_model(model)
+    except ValueError as exc:
+        log.info("Rejected model save: %s", exc)
+        message = str(exc).lower()
+        if "blank" in message:
+            error = _MODEL_ERRORS["blank"]
+        elif "spaces" in message:
+            error = _MODEL_ERRORS["spaces"]
+        elif "long" in message:
+            error = _MODEL_ERRORS["long"]
+        else:
+            error = "Could not save that model id."
+        return templates.TemplateResponse(
+            request,
+            "admin.html",
+            _admin_context(error=error),
+            status_code=400,
+        )
+    log.info("Model saved from the admin page")
+    return RedirectResponse("/admin?notice=model_saved", status_code=303)
+
+
+@app.post("/admin/model/clear")
+async def admin_clear_model(_user=Depends(_require_auth)):
+    clear_model()
+    log.info("Saved model cleared from the admin page")
+    return RedirectResponse("/admin?notice=model_cleared", status_code=303)
+
+
+_SENDGRID_ERRORS = {
+    "email": "From address must be an email.",
+    "domain": "Inbound domain cannot contain spaces or @.",
+    "spaces": "API key and inbound token cannot contain spaces.",
+    "long": "A SendGrid setting is too long.",
+}
+
+
+@app.post("/admin/sendgrid", response_class=HTMLResponse)
+async def admin_save_sendgrid(
+    request: Request,
+    sendgrid_api_key: str = Form(""),
+    sendgrid_from_email: str = Form(""),
+    sendgrid_from_name: str = Form(""),
+    sendgrid_inbound_domain: str = Form(""),
+    sendgrid_inbound_token: str = Form(""),
+    _user=Depends(_require_auth),
+):
+    try:
+        save_sendgrid_settings(
+            api_key=sendgrid_api_key,
+            from_email=sendgrid_from_email,
+            from_name=sendgrid_from_name,
+            inbound_domain=sendgrid_inbound_domain,
+            inbound_token=sendgrid_inbound_token,
+        )
+    except ValueError as exc:
+        log.info("Rejected SendGrid settings save: %s", exc)
+        text = str(exc).lower()
+        if "email" in text:
+            error = _SENDGRID_ERRORS["email"]
+        elif "domain" in text:
+            error = _SENDGRID_ERRORS["domain"]
+        elif "spaces" in text:
+            error = _SENDGRID_ERRORS["spaces"]
+        elif "long" in text:
+            error = _SENDGRID_ERRORS["long"]
+        else:
+            error = "Could not save SendGrid settings."
+        return templates.TemplateResponse(
+            request,
+            "admin.html",
+            _admin_context(error=error),
+            status_code=400,
+        )
+    log.info("SendGrid settings saved from the admin page")
+    return RedirectResponse("/admin?notice=sendgrid_saved", status_code=303)
+
+
+@app.post("/admin/sendgrid/clear")
+async def admin_clear_sendgrid(_user=Depends(_require_auth)):
+    clear_sendgrid_settings()
+    log.info("Saved SendGrid settings cleared from the admin page")
+    return RedirectResponse("/admin?notice=sendgrid_cleared", status_code=303)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MAIL — SendGrid inbound
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/mail", response_class=HTMLResponse)
+async def mail_view(request: Request, _user=Depends(_require_auth)):
+    sendgrid = load_sendgrid_config()
+    return templates.TemplateResponse(request, "mail.html", {
+        "emails": list_inbound_emails(),
+        "sendgrid_can_send": sendgrid.can_send,
+        "sendgrid_webhook_open": not bool(sendgrid.inbound_token),
+        "inbound_domain": sendgrid.inbound_domain,
+    })
+
+
+@app.post("/webhooks/sendgrid/inbound")
+async def sendgrid_inbound(request: Request, token: str = ""):
+    """Receive SendGrid Inbound Parse. Auth is the inbound token, not web login."""
+    configured = load_sendgrid_config().inbound_token
+    provided = token or request.headers.get("x-agencybill-inbound-token") or ""
+    if configured:
+        if not provided or not secrets.compare_digest(provided, configured):
+            raise HTTPException(401, "Invalid inbound token")
+    form = await request.form()
+    record = store_inbound(form)
+    log.info(
+        "Inbound email stored id=%s workflow=%s",
+        record["id"], record.get("workflow_id") or "",
+    )
+    return record
 
 
 # ─────────────────────────────────────────────────────────────────────────────

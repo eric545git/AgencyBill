@@ -57,6 +57,8 @@
             hx-swap="outerHTML">
       </span>
     </a>
+    <a href="/mail" class="btn btn-ghost btn-sm {% if request.url.path == '/mail' %}btn-active{% endif %}">Mail</a>
+    <a href="/admin" class="btn btn-ghost btn-sm {% if request.url.path == '/admin' %}btn-active{% endif %}">Admin</a>
   </div>
 </nav>
 
@@ -66,7 +68,7 @@
 </main>
 
 <footer class="footer footer-center p-4 bg-base-100 text-base-content/40 text-xs mt-8">
-  <p>AgencyBill · Agentic LPL Renewal · Powered by Claude claude-sonnet-4-6</p>
+  <p>AgencyBill · Agentic LPL Renewal · {{ llm_footer_label() }}</p>
 </footer>
 
 </body>

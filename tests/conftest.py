@@ -13,6 +13,7 @@ def tmp_db(tmp_path, monkeypatch):
     monkeypatch.setenv("AGENCYBILL_DB_PATH", str(db_path))
     monkeypatch.setenv("AGENCYBILL_OUTPUT_DIR", str(tmp_path / "output"))
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-real")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "")
     monkeypatch.setenv("AGENCYBILL_WEB_PASSWORD", "")
 
     # Reload config/database paths for this process
@@ -20,6 +21,7 @@ def tmp_db(tmp_path, monkeypatch):
     monkeypatch.setattr(cfg, "DB_PATH", db_path)
     monkeypatch.setattr(cfg, "OUTPUT_DIR", tmp_path / "output")
     monkeypatch.setattr(cfg, "ANTHROPIC_API_KEY", "test-key-not-real")
+    monkeypatch.setattr(cfg, "OPENROUTER_API_KEY", "")
     monkeypatch.setattr(cfg, "WEB_PASSWORD", "")
     cfg.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
