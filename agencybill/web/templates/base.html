@@ -42,7 +42,7 @@
     <a href="/workflows" class="btn btn-ghost btn-sm {% if '/workflows' in request.url.path and request.url.path != '/workflows/start' %}btn-active{% endif %}">Workflows</a>
     <a href="/policies" class="btn btn-ghost btn-sm {% if '/policies' in request.url.path %}btn-active{% endif %}">Policies</a>
     <a href="/queue" class="btn btn-ghost btn-sm {% if '/queue' in request.url.path %}btn-active{% endif %}">
-      Queue
+      Decisions
       <span id="queue-count"
             hx-get="/htmx/queue/count"
             hx-trigger="load, every 10s"

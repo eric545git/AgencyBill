@@ -31,6 +31,9 @@ from agencybill.tools.alerts_tools import (
     get_alerts, count_open_alerts, acknowledge_alert, resolve_alert,
     get_alerts_for_workflow, run_alert_scan,
 )
+from agencybill.tools.workbench_tools import (
+    list_pending_decisions, morning_brief, enrich_market_quotes, days_until,
+)
 from agencybill.web import worker
 
 log = get_logger("agencybill.web")
@@ -111,8 +114,9 @@ async def dashboard(request: Request, _user=Depends(_require_auth)):
     paused    = [w for w in workflows if w["status"] == "paused"]
     terminal  = [w for w in workflows if w["status"] in ("non_renewal","declined","cancelled")]
 
-    queue = _pending_checkpoints()
+    queue = list_pending_decisions(ranked=True)
     expiring = list_expiring_policies(90)
+    brief = morning_brief()
 
     return templates.TemplateResponse(request, "dashboard.html", {
         "workflows": workflows,
@@ -122,6 +126,7 @@ async def dashboard(request: Request, _user=Depends(_require_auth)):
         "terminal": terminal,
         "queue": queue,
         "expiring": expiring,
+        "brief": brief,
         "running_ids": worker.list_running(),
     })
 
@@ -160,12 +165,19 @@ async def workflow_detail(request: Request, workflow_id: str, _user=Depends(_req
     wf_events = _workflow_events(workflow_id)
     quotes    = _get_quotes(workflow_id)
     submissions   = get_submissions(workflow_id)
-    mkt_quotes    = get_market_quotes(workflow_id)
+    mkt_quotes    = enrich_market_quotes(workflow_id, policy.get("annual_premium"))
     wf_alerts     = [a for a in get_alerts_for_workflow(workflow_id)
                      if a["status"] in ("open", "acknowledged")]
     worker_status = worker.get_status(workflow_id)
 
-    pending_cp = next((c for c in checkpts if not c.get("decision")), None)
+    pending_cp = next(
+        (c for c in list_pending_decisions(ranked=False) if c["workflow_id"] == workflow_id),
+        None,
+    )
+    # Fallback if enrichment missed a raw checkpoint
+    if pending_cp is None:
+        raw = next((c for c in checkpts if not c.get("decision")), None)
+        pending_cp = raw
 
     return templates.TemplateResponse(request, "workflow_detail.html", {
         "wf": wf,
@@ -182,6 +194,7 @@ async def workflow_detail(request: Request, workflow_id: str, _user=Depends(_req
         "wf_alerts": wf_alerts,
         "pending_cp": pending_cp,
         "worker_status": worker_status,
+        "days_to_expiry": days_until(policy.get("expiration_date")),
     })
 
 
@@ -190,10 +203,20 @@ async def workflow_detail(request: Request, workflow_id: str, _user=Depends(_req
 # ─────────────────────────────────────────────────────────────────────────────
 
 @app.get("/queue", response_class=HTMLResponse)
-async def queue_view(request: Request, _user=Depends(_require_auth)):
-    checkpoints = _pending_checkpoints()
+async def queue_view(request: Request, band: str = "", _user=Depends(_require_auth)):
+    all_cps = list_pending_decisions(ranked=True)
+    counts = {
+        "all": len(all_cps),
+        "critical": sum(1 for c in all_cps if c.get("urgency_band") == "critical"),
+        "high": sum(1 for c in all_cps if c.get("urgency_band") == "high"),
+        "medium": sum(1 for c in all_cps if c.get("urgency_band") == "medium"),
+        "low": sum(1 for c in all_cps if c.get("urgency_band") == "low"),
+    }
+    checkpoints = [c for c in all_cps if c.get("urgency_band") == band] if band else all_cps
     return templates.TemplateResponse(request, "queue.html", {
         "checkpoints": checkpoints,
+        "filter_band": band,
+        "counts": counts,
     })
 
 
@@ -203,6 +226,7 @@ async def decide_checkpoint(
     checkpoint_id: str,
     decision: str = Form(...),
     notes: str = Form(""),
+    next: str = Form(""),
     _user=Depends(_require_auth),
 ):
     resolve_checkpoint(checkpoint_id, decision, notes=notes)
@@ -212,6 +236,9 @@ async def decide_checkpoint(
             (checkpoint_id,),
         ).fetchone()
     wf_id = row["workflow_id"] if row else None
+    # Allow in-context decide to return to workflow or stay on queue
+    if next and next.startswith("/"):
+        return RedirectResponse(next, status_code=303)
     if wf_id:
         return RedirectResponse(f"/workflows/{wf_id}", status_code=303)
     return RedirectResponse("/queue", status_code=303)
@@ -363,7 +390,7 @@ async def htmx_audit(request: Request, workflow_id: str, _user=Depends(_require_
 
 @app.get("/htmx/queue/count", response_class=HTMLResponse)
 async def htmx_queue_count(request: Request, _user=Depends(_require_auth)):
-    count = len(_pending_checkpoints())
+    count = len(list_pending_decisions(ranked=False))
     badge = f'<span id="queue-count" class="badge {"badge-error" if count else "badge-ghost"}">{count}</span>'
     return HTMLResponse(badge)
 
@@ -393,7 +420,7 @@ async def htmx_dashboard_stats(request: Request, _user=Depends(_require_auth)):
     workflows = list_workflows()
     active   = sum(1 for w in workflows if w["status"] == "active")
     complete = sum(1 for w in workflows if w["status"] == "complete")
-    queue    = len(_pending_checkpoints())
+    queue    = len(list_pending_decisions(ranked=False))
     expiring = len(list_expiring_policies(90))
     return templates.TemplateResponse(request, "partials/dashboard_stats.html", {
         "active": active,
@@ -401,47 +428,6 @@ async def htmx_dashboard_stats(request: Request, _user=Depends(_require_auth)):
         "queue": queue,
         "expiring": expiring,
     })
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# HELPERS
-# ─────────────────────────────────────────────────────────────────────────────
-
-def _pending_checkpoints() -> list[dict]:
-    with db() as conn:
-        rows = conn.execute(
-            """SELECT hc.*, w.phase AS workflow_phase,
-                      p.policy_number, f.name AS firm_name
-               FROM human_checkpoints hc
-               JOIN renewal_workflows w ON hc.workflow_id = w.id
-               JOIN policies p ON w.policy_id = p.id
-               JOIN law_firms f ON p.firm_id = f.id
-               WHERE hc.decision IS NULL
-               ORDER BY hc.created_at""",
-        ).fetchall()
-    result = []
-    for r in rows:
-        d = row_to_dict(r)
-        if d.get("options_json"):
-            try:
-                raw = json.loads(d["options_json"])
-            except Exception as exc:
-                log.warning("Bad checkpoint options_json: %s", exc)
-                raw = []
-            options = []
-            for opt in raw:
-                if isinstance(opt, dict):
-                    options.append({
-                        "key": opt.get("key") or opt.get("value") or opt.get("label"),
-                        "label": opt.get("label") or opt.get("key") or "",
-                    })
-                else:
-                    options.append({"key": str(opt), "label": str(opt)})
-            d["options"] = options
-        else:
-            d["options"] = []
-        result.append(d)
-    return result
 
 
 def _workflow_events(workflow_id: str) -> list[dict]:

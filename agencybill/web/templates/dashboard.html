@@ -7,6 +7,10 @@
   <p class="text-base-content/60 text-sm">Agency Bill Renewal — LPL Portfolio Overview</p>
 </div>
 
+{% if brief %}
+  {% include "partials/morning_brief.html" %}
+{% endif %}
+
 <!-- Stats row — auto-refreshes every 15s -->
 <div id="stats-row"
      hx-get="/htmx/dashboard/stats"
@@ -86,11 +90,21 @@
           {% for cp in queue[:5] %}
           <li class="px-5 py-3">
             <div class="flex items-start justify-between gap-2">
-              <div>
-                <p class="font-medium text-sm">{{ cp.firm_name }}</p>
-                <p class="text-xs text-base-content/50">{{ cp.phase }} — {{ cp.prompt[:60] }}{% if cp.prompt|length > 60 %}…{% endif %}</p>
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 mb-0.5">
+                  <span class="badge badge-xs
+                    {% if cp.urgency_band == 'critical' %}badge-error
+                    {% elif cp.urgency_band == 'high' %}badge-warning
+                    {% elif cp.urgency_band == 'medium' %}badge-info
+                    {% else %}badge-ghost{% endif %}">{{ cp.urgency_band }}</span>
+                  <p class="font-medium text-sm truncate">{{ cp.firm_name }}</p>
+                </div>
+                <p class="text-xs text-base-content/50 truncate">
+                  {% if cp.days_to_expiry is not none %}{{ cp.days_to_expiry }}d · {% endif %}
+                  {{ cp.phase }} — {{ cp.prompt[:50] }}{% if cp.prompt|length > 50 %}…{% endif %}
+                </p>
               </div>
-              <a href="/queue" class="btn btn-xs btn-warning shrink-0">Decide</a>
+              <a href="/workflows/{{ cp.workflow_id }}" class="btn btn-xs btn-warning shrink-0">Decide</a>
             </div>
           </li>
           {% endfor %}
