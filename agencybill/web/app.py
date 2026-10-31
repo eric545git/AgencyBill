@@ -12,7 +12,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from agencybill.config import PHASES, WEB_PASSWORD, WEB_USER, phase_pct
+from agencybill.config import PHASES, WEB_PASSWORD, WEB_USER, llm_footer_label, phase_pct
 from agencybill.database import init_db, db, row_to_dict
 from agencybill.logging_config import get_logger
 from agencybill.tools.policy_tools import (
@@ -100,6 +100,7 @@ templates.env.filters["short_id"] = _short_id
 templates.env.filters["phase_pct"] = phase_pct
 templates.env.globals["now"] = lambda: datetime.now().strftime("%H:%M:%S")
 templates.env.globals["PHASES"] = PHASES
+templates.env.globals["llm_footer_label"] = llm_footer_label
 
 
 # ─────────────────────────────────────────────────────────────────────────────

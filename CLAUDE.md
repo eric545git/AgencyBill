@@ -10,7 +10,7 @@ AgencyBill automates LPL (Lawyers Professional Liability) insurance renewals usi
 
 ```bash
 pip install -e .
-cp .env.example .env        # add ANTHROPIC_API_KEY
+cp .env.example .env        # add ANTHROPIC_API_KEY or OPENROUTER_API_KEY
 agencybill seed             # load sample data
 agencybill web              # start web UI at http://127.0.0.1:8000
 agencybill start --policy-id pol-001 --auto   # CLI, no HITL prompts
@@ -125,8 +125,10 @@ The `dedup_key` format is `"alert_type:entity_id"`. Never include timestamps in 
 
 | Variable | Default | Notes |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | required | No fallback |
-| `AGENCYBILL_MODEL` | `claude-sonnet-4-6` | Change to `claude-opus-4-7` for more capable agents |
+| `ANTHROPIC_API_KEY` | — | Direct Anthropic key. Used when `OPENROUTER_API_KEY` is empty |
+| `OPENROUTER_API_KEY` | — | When set, every agent LLM call uses OpenRouter instead of Anthropic |
+| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api` | Anthropic Messages-compatible OpenRouter base URL |
+| `AGENCYBILL_MODEL` | `claude-sonnet-4-6` | Anthropic id, or an OpenRouter slug. Dashed ids map to `anthropic/claude-sonnet-4.6` on OpenRouter |
 | `AGENCYBILL_DB_PATH` | `data/agencybill.db` | Relative to project root |
 | `AGENCYBILL_OUTPUT_DIR` | `output` | Relative to project root |
 | `AGENCYBILL_MAX_AGENT_TURNS` | `20` | Increase if complex accounts run out of turns |
@@ -138,7 +140,7 @@ The `dedup_key` format is `"alert_type:entity_id"`. Never include timestamps in 
 
 **`ModuleNotFoundError: agencybill`** — Run `pip install -e .` from the project root.
 
-**`ANTHROPIC_API_KEY` not found** — Ensure `.env` exists and has the key. `config.py` calls `load_dotenv()` which reads `.env` relative to the working directory.
+**No LLM API key** — Set `OPENROUTER_API_KEY` or `ANTHROPIC_API_KEY` in `.env`. `config.py` calls `load_dotenv()` which reads `.env` relative to the working directory. A non-empty OpenRouter key routes every agent call through OpenRouter.
 
 **Workflow stuck at a HITL checkpoint in web mode** — Navigate to `/queue` in the browser and submit a decision. The background thread polls the DB and will resume within 2 seconds.
 

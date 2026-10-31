@@ -1,6 +1,8 @@
 """Application configuration loaded from environment variables."""
 
 import os
+import re
+from dataclasses import dataclass
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -9,6 +11,9 @@ load_dotenv()
 BASE_DIR = Path(__file__).parent.parent
 
 ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
+# When set, every agent LLM call goes through OpenRouter instead of Anthropic directly.
+OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
+OPENROUTER_BASE_URL: str = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api").rstrip("/")
 DB_PATH: Path = BASE_DIR / os.getenv("AGENCYBILL_DB_PATH", "data/agencybill.db")
 OUTPUT_DIR: Path = BASE_DIR / os.getenv("AGENCYBILL_OUTPUT_DIR", "output")
 MODEL: str = os.getenv("AGENCYBILL_MODEL", "claude-sonnet-4-6")
@@ -83,6 +88,75 @@ NEXT_PHASE = {
     "INVOICING":         "REMITTANCE",
     "REMITTANCE":        "COMPLETE",
 }
+
+
+# Anthropic ids end in -<major>-<minor> (claude-sonnet-4-6). OpenRouter uses dots
+# (anthropic/claude-sonnet-4.6). Dated ids (…-20251001) are left unchanged.
+_ANTHROPIC_VERSION_SUFFIX = re.compile(r"-(\d+)-(\d{1,2})$")
+
+
+@dataclass(frozen=True)
+class LLMSettings:
+    """Resolved provider for every agent LLM call."""
+
+    provider: str  # "openrouter", "anthropic", or "" when unconfigured
+    api_key: str
+    base_url: str | None
+    model: str
+
+    @property
+    def configured(self) -> bool:
+        return self.provider in ("openrouter", "anthropic") and bool(self.api_key)
+
+
+def openrouter_model_id(model: str) -> str:
+    """Map an Anthropic model id to an OpenRouter slug.
+
+    A value that already contains "/" is used as-is so callers can pick any
+    OpenRouter model (``openai/gpt-4.1``, ``anthropic/claude-sonnet-4.6``).
+    """
+    model = (model or "").strip()
+    if not model or "/" in model:
+        return model
+    model = _ANTHROPIC_VERSION_SUFFIX.sub(r"-\1.\2", model)
+    return f"anthropic/{model}"
+
+
+def resolve_llm_settings() -> LLMSettings:
+    """Choose OpenRouter when its key is set; otherwise the Anthropic API.
+
+    ``OPENROUTER_API_KEY`` wins when both keys are present so one variable
+    routes every agent call.
+    """
+    openrouter_key = OPENROUTER_API_KEY.strip()
+    anthropic_key = ANTHROPIC_API_KEY.strip()
+    model = MODEL.strip() or "claude-sonnet-4-6"
+    if openrouter_key:
+        base = (OPENROUTER_BASE_URL or "https://openrouter.ai/api").rstrip("/")
+        return LLMSettings(
+            provider="openrouter",
+            api_key=openrouter_key,
+            base_url=base,
+            model=openrouter_model_id(model),
+        )
+    if anthropic_key:
+        return LLMSettings(
+            provider="anthropic",
+            api_key=anthropic_key,
+            base_url=None,
+            model=model,
+        )
+    return LLMSettings(provider="", api_key="", base_url=None, model=model)
+
+
+def llm_footer_label() -> str:
+    """Short provider/model line for the web UI footer."""
+    settings = resolve_llm_settings()
+    if settings.provider == "openrouter":
+        return f"OpenRouter · {settings.model}"
+    if settings.provider == "anthropic":
+        return f"Claude · {settings.model}"
+    return "LLM not configured"
 
 
 def phase_pct(phase: str) -> int:

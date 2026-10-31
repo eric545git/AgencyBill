@@ -40,7 +40,7 @@ Phase 8 — Premium Remittance      Remit 85% to carrier, retain 15% commission 
 ### Requirements
 
 - Python 3.11 or later
-- An [Anthropic API key](https://console.anthropic.com/)
+- An [Anthropic API key](https://console.anthropic.com/) or an [OpenRouter API key](https://openrouter.ai/keys)
 - No other external services required (SQLite is built-in)
 
 ### 1 — Clone and install
@@ -64,6 +64,8 @@ Open `.env` and set your API key:
 ```
 ANTHROPIC_API_KEY=sk-ant-api03-...
 ```
+
+To send every agent call through OpenRouter instead, set `OPENROUTER_API_KEY` and leave the Anthropic key unused. Dashed model ids such as `claude-sonnet-4-6` are mapped to OpenRouter slugs (`anthropic/claude-sonnet-4.6`). Set `AGENCYBILL_MODEL` to a full slug (`openai/gpt-4.1`) to use another model.
 
 All other variables have sensible defaults. See [Configuration](#configuration) for the full list.
 
@@ -363,8 +365,10 @@ All settings are controlled via environment variables (`.env` file):
 
 | Variable | Default | Description |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | *(required)* | Your Anthropic API key |
-| `AGENCYBILL_MODEL` | `claude-sonnet-4-6` | Claude model to use for all agents |
+| `ANTHROPIC_API_KEY` | — | Direct Anthropic key. Ignored when `OPENROUTER_API_KEY` is set |
+| `OPENROUTER_API_KEY` | — | Routes every agent LLM call through OpenRouter |
+| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api` | OpenRouter Messages API base URL |
+| `AGENCYBILL_MODEL` | `claude-sonnet-4-6` | Model id for all agents. OpenRouter accepts a full slug |
 | `AGENCYBILL_DB_PATH` | `data/agencybill.db` | Path to the SQLite database |
 | `AGENCYBILL_OUTPUT_DIR` | `output` | Directory for generated HTML documents |
 | `AGENCYBILL_MAX_AGENT_TURNS` | `20` | Max tool-use turns per agent phase |
