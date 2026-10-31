@@ -57,7 +57,7 @@ Schema is in `agencybill/db/schema.sql` and applied via `init_db()` on startup. 
 
 ### Notification System
 
-`send_notification()` writes to the `notifications` table — it does **not** actually send email. In a production deployment this would call an email API. Agents use it to simulate outbound communications.
+`send_notification()` writes to the `notifications` table. When `SENDGRID_API_KEY` and `SENDGRID_FROM_EMAIL` are set (environment or the Admin page), email notifications are delivered through SendGrid. Otherwise the row is stored with status `logged`. SendGrid Inbound Parse posts to `/webhooks/sendgrid/inbound`; received messages are stored in `inbound_emails` and shown on `/mail`. A reply-to plus-address `renewals+{workflow_id}@{SENDGRID_INBOUND_DOMAIN}` links replies back to the workflow.
 
 ## File Map
 
@@ -134,6 +134,11 @@ The `dedup_key` format is `"alert_type:entity_id"`. Never include timestamps in 
 | `AGENCYBILL_MAX_AGENT_TURNS` | `20` | Increase if complex accounts run out of turns |
 | `AGENCYBILL_COMMISSION_PCT` | `0.15` | Default broker commission if broker has no override |
 | `AGENCYBILL_WEB_USER` | `agencybill` | HTTP Basic Auth username for the web UI |
+| `SENDGRID_API_KEY` | — | SendGrid mail key. Admin page can override it |
+| `SENDGRID_FROM_EMAIL` | — | Verified sender. Required together with the API key to send |
+| `SENDGRID_FROM_NAME` | `AgencyBill` | From display name |
+| `SENDGRID_INBOUND_DOMAIN` | — | Domain on SendGrid Inbound Parse. Enables reply-to plus addressing |
+| `SENDGRID_INBOUND_TOKEN` | — | When set, the inbound webhook requires this token |
 | `AGENCYBILL_WEB_PASSWORD` | _(empty)_ | Set to enable web auth; leave empty only for local demo |
 
 ## Common Issues

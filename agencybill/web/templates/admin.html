@@ -125,4 +125,72 @@
   </div>
 </div>
 
+<div class="card bg-base-100 shadow max-w-2xl mt-6">
+  <div class="card-body">
+    <h2 class="card-title text-lg">SendGrid</h2>
+    <p class="text-sm text-base-content/70">
+      When an API key and from address are set, every email notification is delivered
+      through SendGrid. Otherwise it is only logged. Replies arrive at
+      <span class="font-mono">POST /webhooks/sendgrid/inbound</span>.
+      Point SendGrid Inbound Parse at that URL. If an inbound token is set, add
+      <span class="font-mono">?token=</span> with that token.
+      {% if sendgrid_inbound_domain %}
+      Replies use <span class="font-mono">renewals+workflow-id@{{ sendgrid_inbound_domain }}</span>.
+      {% endif %}
+    </p>
+    <div class="text-sm mt-2">
+      <span class="font-medium">Sending:</span>
+      {% if sendgrid_can_send %}on{% else %}off — set an API key and from address{% endif %}
+      · <span class="font-medium">Key:</span> <span class="font-mono">{{ sendgrid_key_hint }}</span>
+      · <span class="font-medium">Inbound token:</span> <span class="font-mono">{{ sendgrid_token_hint }}</span>
+      {% if sendgrid_webhook_open %}
+      · webhook accepts posts without a token
+      {% endif %}
+    </div>
+
+    <form method="post" action="/admin/sendgrid" class="mt-2 grid gap-2">
+      <label class="form-control w-full" for="sendgrid-api-key">
+        <div class="label"><span class="label-text">API key</span></div>
+        <input id="sendgrid-api-key" type="password" name="sendgrid_api_key"
+               class="input input-bordered w-full font-mono" autocomplete="off" spellcheck="false"
+               placeholder="SG...." />
+        <div class="label"><span class="label-text-alt">Leave blank to keep the saved key.</span></div>
+      </label>
+      <label class="form-control w-full" for="sendgrid-from-email">
+        <div class="label"><span class="label-text">From email</span></div>
+        <input id="sendgrid-from-email" type="email" name="sendgrid_from_email"
+               value="{{ sendgrid_from_email }}"
+               class="input input-bordered w-full font-mono" autocomplete="off"
+               placeholder="renewals@example.com" />
+      </label>
+      <label class="form-control w-full" for="sendgrid-from-name">
+        <div class="label"><span class="label-text">From name</span></div>
+        <input id="sendgrid-from-name" type="text" name="sendgrid_from_name"
+               value="{{ sendgrid_from_name }}"
+               class="input input-bordered w-full" autocomplete="off" />
+      </label>
+      <label class="form-control w-full" for="sendgrid-inbound-domain">
+        <div class="label"><span class="label-text">Inbound domain</span></div>
+        <input id="sendgrid-inbound-domain" type="text" name="sendgrid_inbound_domain"
+               value="{{ sendgrid_inbound_domain }}"
+               class="input input-bordered w-full font-mono" autocomplete="off"
+               placeholder="parse.example.com" />
+      </label>
+      <label class="form-control w-full" for="sendgrid-inbound-token">
+        <div class="label"><span class="label-text">Inbound token</span></div>
+        <input id="sendgrid-inbound-token" type="password" name="sendgrid_inbound_token"
+               class="input input-bordered w-full font-mono" autocomplete="off" spellcheck="false" />
+        <div class="label"><span class="label-text-alt">Leave blank to keep the saved token.</span></div>
+      </label>
+      <div class="card-actions justify-end mt-2">
+        <button type="submit" class="btn btn-primary">Save SendGrid</button>
+      </div>
+    </form>
+
+    <form method="post" action="/admin/sendgrid/clear" class="mt-2">
+      <button type="submit" class="btn btn-outline btn-error">Clear saved SendGrid settings</button>
+    </form>
+  </div>
+</div>
+
 {% endblock %}

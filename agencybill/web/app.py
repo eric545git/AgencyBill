@@ -33,6 +33,13 @@ from agencybill.tools.audit_tools import (
     get_audit_trail, get_checkpoints, resolve_checkpoint,
 )
 from agencybill.tools.payment_tools import get_invoices_for_workflow, get_remittances
+from agencybill.email.sendgrid import (
+    clear_sendgrid_settings,
+    list_inbound_emails,
+    load_sendgrid_config,
+    save_sendgrid_settings,
+    store_inbound,
+)
 from agencybill.tools.notification_tools import get_notifications
 from agencybill.tools.market_tools import (
     get_submissions, get_market_quotes, record_market_quote,
@@ -173,6 +180,7 @@ async def workflow_detail(request: Request, workflow_id: str, _user=Depends(_req
     invoices  = get_invoices_for_workflow(workflow_id)
     remits    = get_remittances(workflow_id)
     notifs    = get_notifications(workflow_id)
+    inbound   = list_inbound_emails(workflow_id)
     wf_events = _workflow_events(workflow_id)
     quotes    = _get_quotes(workflow_id)
     submissions   = get_submissions(workflow_id)
@@ -198,6 +206,7 @@ async def workflow_detail(request: Request, workflow_id: str, _user=Depends(_req
         "invoices": invoices,
         "remittances": remits,
         "notifications": notifs,
+        "inbound_emails": inbound,
         "wf_events": wf_events,
         "quotes": quotes,
         "submissions": submissions,
@@ -341,6 +350,8 @@ _ADMIN_NOTICES = {
     "cleared": "Saved OpenRouter key cleared. Routing falls back to the environment variable.",
     "model_saved": "Model saved. It overrides AGENCYBILL_MODEL for every agent call.",
     "model_cleared": "Saved model cleared. Calls fall back to AGENCYBILL_MODEL.",
+    "sendgrid_saved": "SendGrid settings saved. A saved value overrides the matching environment variable.",
+    "sendgrid_cleared": "Saved SendGrid settings cleared. Mail falls back to the environment variables.",
 }
 _BLANK_KEY_ERROR = "Enter an OpenRouter API key to save it. Use Clear to remove a saved key."
 _MODEL_ERRORS = {
@@ -357,6 +368,7 @@ def _admin_context(notice: str = "", error: str = "") -> dict:
     env_key = (cfg.OPENROUTER_API_KEY or "").strip()
     env_model = (cfg.MODEL or "").strip() or "claude-sonnet-4-6"
     settings = cfg.resolve_llm_settings()
+    sendgrid = load_sendgrid_config()
     if settings.provider == "openrouter":
         provider_label = "OpenRouter"
     elif settings.provider == "anthropic":
@@ -389,6 +401,13 @@ def _admin_context(notice: str = "", error: str = "") -> dict:
         "error": error,
         "has_saved_key": bool(saved),
         "has_saved_model": bool(saved_model),
+        "sendgrid_can_send": sendgrid.can_send,
+        "sendgrid_from_email": sendgrid.from_email,
+        "sendgrid_from_name": sendgrid.from_name,
+        "sendgrid_inbound_domain": sendgrid.inbound_domain,
+        "sendgrid_key_hint": mask_api_key(sendgrid.api_key),
+        "sendgrid_token_hint": mask_api_key(sendgrid.inbound_token),
+        "sendgrid_webhook_open": not bool(sendgrid.inbound_token),
     }
 
 
@@ -460,6 +479,94 @@ async def admin_clear_model(_user=Depends(_require_auth)):
     clear_model()
     log.info("Saved model cleared from the admin page")
     return RedirectResponse("/admin?notice=model_cleared", status_code=303)
+
+
+_SENDGRID_ERRORS = {
+    "email": "From address must be an email.",
+    "domain": "Inbound domain cannot contain spaces or @.",
+    "spaces": "API key and inbound token cannot contain spaces.",
+    "long": "A SendGrid setting is too long.",
+}
+
+
+@app.post("/admin/sendgrid", response_class=HTMLResponse)
+async def admin_save_sendgrid(
+    request: Request,
+    sendgrid_api_key: str = Form(""),
+    sendgrid_from_email: str = Form(""),
+    sendgrid_from_name: str = Form(""),
+    sendgrid_inbound_domain: str = Form(""),
+    sendgrid_inbound_token: str = Form(""),
+    _user=Depends(_require_auth),
+):
+    try:
+        save_sendgrid_settings(
+            api_key=sendgrid_api_key,
+            from_email=sendgrid_from_email,
+            from_name=sendgrid_from_name,
+            inbound_domain=sendgrid_inbound_domain,
+            inbound_token=sendgrid_inbound_token,
+        )
+    except ValueError as exc:
+        log.info("Rejected SendGrid settings save: %s", exc)
+        text = str(exc).lower()
+        if "email" in text:
+            error = _SENDGRID_ERRORS["email"]
+        elif "domain" in text:
+            error = _SENDGRID_ERRORS["domain"]
+        elif "spaces" in text:
+            error = _SENDGRID_ERRORS["spaces"]
+        elif "long" in text:
+            error = _SENDGRID_ERRORS["long"]
+        else:
+            error = "Could not save SendGrid settings."
+        return templates.TemplateResponse(
+            request,
+            "admin.html",
+            _admin_context(error=error),
+            status_code=400,
+        )
+    log.info("SendGrid settings saved from the admin page")
+    return RedirectResponse("/admin?notice=sendgrid_saved", status_code=303)
+
+
+@app.post("/admin/sendgrid/clear")
+async def admin_clear_sendgrid(_user=Depends(_require_auth)):
+    clear_sendgrid_settings()
+    log.info("Saved SendGrid settings cleared from the admin page")
+    return RedirectResponse("/admin?notice=sendgrid_cleared", status_code=303)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MAIL — SendGrid inbound
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/mail", response_class=HTMLResponse)
+async def mail_view(request: Request, _user=Depends(_require_auth)):
+    sendgrid = load_sendgrid_config()
+    return templates.TemplateResponse(request, "mail.html", {
+        "emails": list_inbound_emails(),
+        "sendgrid_can_send": sendgrid.can_send,
+        "sendgrid_webhook_open": not bool(sendgrid.inbound_token),
+        "inbound_domain": sendgrid.inbound_domain,
+    })
+
+
+@app.post("/webhooks/sendgrid/inbound")
+async def sendgrid_inbound(request: Request, token: str = ""):
+    """Receive SendGrid Inbound Parse. Auth is the inbound token, not web login."""
+    configured = load_sendgrid_config().inbound_token
+    provided = token or request.headers.get("x-agencybill-inbound-token") or ""
+    if configured:
+        if not provided or not secrets.compare_digest(provided, configured):
+            raise HTTPException(401, "Invalid inbound token")
+    form = await request.form()
+    record = store_inbound(form)
+    log.info(
+        "Inbound email stored id=%s workflow=%s",
+        record["id"], record.get("workflow_id") or "",
+    )
+    return record
 
 
 # ─────────────────────────────────────────────────────────────────────────────

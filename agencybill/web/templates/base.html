@@ -57,6 +57,7 @@
             hx-swap="outerHTML">
       </span>
     </a>
+    <a href="/mail" class="btn btn-ghost btn-sm {% if request.url.path == '/mail' %}btn-active{% endif %}">Mail</a>
     <a href="/admin" class="btn btn-ghost btn-sm {% if request.url.path == '/admin' %}btn-active{% endif %}">Admin</a>
   </div>
 </nav>

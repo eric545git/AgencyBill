@@ -3,16 +3,19 @@
 import pytest
 
 import agencybill.config as cfg
+import agencybill.database as database
 from agencybill.agents.base import BaseAgent
 from agencybill.config import openrouter_model_id, resolve_llm_settings
 
 
 @pytest.fixture()
-def llm_env(monkeypatch):
+def llm_env(monkeypatch, tmp_path):
     monkeypatch.setattr(cfg, "ANTHROPIC_API_KEY", "")
     monkeypatch.setattr(cfg, "OPENROUTER_API_KEY", "")
     monkeypatch.setattr(cfg, "OPENROUTER_BASE_URL", "https://openrouter.ai/api")
     monkeypatch.setattr(cfg, "MODEL", "claude-sonnet-4-6")
+    # Ignore model and key overrides saved in the developer database.
+    monkeypatch.setattr(database, "DB_PATH", tmp_path / "absent.db")
 
 
 def test_openrouter_slug_mapping():

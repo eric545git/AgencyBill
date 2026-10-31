@@ -76,6 +76,26 @@ def clear_model() -> None:
     _delete_setting(LLM_MODEL_SETTING)
 
 
+def get_setting(key: str) -> str | None:
+    """Non-empty saved value for an app setting, or None."""
+    return _get_setting(key)
+
+
+def set_setting(key: str, value: str) -> None:
+    """Insert or replace a non-empty setting. Callers validate the value."""
+    stored = (value or "").strip()
+    if not stored:
+        raise ValueError("Setting value cannot be blank")
+    if len(stored) > 2000:
+        raise ValueError("Setting value is too long")
+    _set_setting(key, stored)
+
+
+def delete_setting(key: str) -> None:
+    """Remove a saved setting so callers fall back to the environment."""
+    _delete_setting(key)
+
+
 def _get_setting(key: str) -> str | None:
     """Non-empty saved value, or None when there is no override."""
     conn = _connect_readonly()

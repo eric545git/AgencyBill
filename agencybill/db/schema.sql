@@ -319,8 +319,29 @@ CREATE TABLE IF NOT EXISTS notifications (
     body        TEXT,
     channel     TEXT DEFAULT 'email',
     sent_at     TEXT DEFAULT (datetime('now')),
-    status      TEXT DEFAULT 'sent'
+    status      TEXT DEFAULT 'sent',
+    provider    TEXT,
+    provider_message_id TEXT,
+    error       TEXT
 );
+
+CREATE INDEX IF NOT EXISTS idx_notifications_workflow ON notifications(workflow_id);
+
+-- Mail received through SendGrid Inbound Parse.
+CREATE TABLE IF NOT EXISTS inbound_emails (
+    id              TEXT PRIMARY KEY,
+    workflow_id     TEXT,
+    from_address    TEXT,
+    to_address      TEXT,
+    subject         TEXT,
+    text_body       TEXT,
+    html_body       TEXT,
+    message_headers TEXT,
+    attachment_count INTEGER DEFAULT 0,
+    received_at     TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_inbound_workflow ON inbound_emails(workflow_id);
 
 -- ─────────────────────────────────────────────
 -- ALERTS & EXCEPTIONS

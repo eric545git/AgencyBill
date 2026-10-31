@@ -268,7 +268,7 @@ agencybill/
 │   ├── claims_tools.py     Claims history and loss run generation
 │   ├── market_tools.py     Market submissions and quote tracking
 │   ├── document_tools.py   Jinja2 document rendering
-│   ├── notification_tools.py  Notification log (simulated email)
+│   ├── notification_tools.py  Notification log; SendGrid when configured
 │   ├── payment_tools.py    Invoices, payments, remittances
 │   ├── audit_tools.py      Event logging and checkpoint management
 │   └── alerts_tools.py     12-scanner exception detection system
@@ -369,6 +369,10 @@ All settings are controlled via environment variables (`.env` file):
 | `OPENROUTER_API_KEY` | — | Fallback OpenRouter key. A key saved on the web Admin page (`/admin`) overrides this variable; clear it there to fall back. When the effective key is set, every agent LLM call uses OpenRouter |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api` | OpenRouter Messages API base URL |
 | `AGENCYBILL_MODEL` | `claude-sonnet-4-6` | Fallback model id. A model saved on the Admin page (`/admin`) overrides this; clear it there to fall back. OpenRouter accepts a full slug |
+| `SENDGRID_API_KEY` | — | Delivers email notifications through SendGrid. Admin can override it |
+| `SENDGRID_FROM_EMAIL` | — | Verified from address. Required with the API key |
+| `SENDGRID_INBOUND_DOMAIN` | — | Inbound Parse domain. Replies use `renewals+workflow-id@domain` |
+| `SENDGRID_INBOUND_TOKEN` | — | Required query token on `POST /webhooks/sendgrid/inbound` when set |
 | `AGENCYBILL_DB_PATH` | `data/agencybill.db` | Path to the SQLite database |
 | `AGENCYBILL_OUTPUT_DIR` | `output` | Directory for generated HTML documents |
 | `AGENCYBILL_MAX_AGENT_TURNS` | `20` | Max tool-use turns per agent phase |
