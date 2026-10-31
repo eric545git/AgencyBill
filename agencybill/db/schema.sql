@@ -122,6 +122,14 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
     description TEXT
 );
 
+-- Operator settings. Secrets such as the OpenRouter API key live here so the
+-- web Admin page can override environment variables without rewriting .env.
+CREATE TABLE IF NOT EXISTS app_settings (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,
+    updated_at  TEXT DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS workflow_events (
     id          TEXT PRIMARY KEY,
     workflow_id TEXT NOT NULL REFERENCES renewal_workflows(id),

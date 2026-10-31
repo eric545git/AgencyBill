@@ -12,8 +12,15 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+import agencybill.config as cfg
 from agencybill.config import PHASES, WEB_PASSWORD, WEB_USER, llm_footer_label, phase_pct
 from agencybill.database import init_db, db, row_to_dict
+from agencybill.settings_store import (
+    clear_openrouter_api_key,
+    get_openrouter_api_key_override,
+    mask_api_key,
+    set_openrouter_api_key,
+)
 from agencybill.logging_config import get_logger
 from agencybill.tools.policy_tools import (
     read_policy, list_expiring_policies, list_workflows,
@@ -320,6 +327,83 @@ async def ack_alert(alert_id: str, _user=Depends(_require_auth)):
 async def res_alert(alert_id: str, _user=Depends(_require_auth)):
     resolve_alert(alert_id)
     return RedirectResponse("/alerts", status_code=303)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ADMIN — OpenRouter API key
+# ─────────────────────────────────────────────────────────────────────────────
+
+_ADMIN_NOTICES = {
+    "saved": "OpenRouter key saved. It overrides OPENROUTER_API_KEY for every agent call.",
+    "cleared": "Saved OpenRouter key cleared. Routing falls back to the environment variable.",
+}
+_BLANK_KEY_ERROR = "Enter an OpenRouter API key to save it. Use Clear to remove a saved key."
+
+
+def _admin_context(notice: str = "", error: str = "") -> dict:
+    """Template fields for /admin. The raw API key is never included."""
+    saved = get_openrouter_api_key_override()
+    env_key = (cfg.OPENROUTER_API_KEY or "").strip()
+    settings = cfg.resolve_llm_settings()
+    if settings.provider == "openrouter":
+        provider_label = "OpenRouter"
+    elif settings.provider == "anthropic":
+        provider_label = "Anthropic"
+    else:
+        provider_label = "Not configured"
+    if saved:
+        source_label = "Saved key (overrides the environment variable)"
+    elif settings.provider == "openrouter":
+        source_label = "Environment variable OPENROUTER_API_KEY"
+    elif settings.provider == "anthropic":
+        source_label = "Environment variable ANTHROPIC_API_KEY"
+    else:
+        source_label = "No key configured"
+    return {
+        "saved_hint": mask_api_key(saved),
+        "env_hint": mask_api_key(env_key),
+        "provider": settings.provider,
+        "provider_label": provider_label,
+        "model": settings.model,
+        "source_label": source_label,
+        "notice": _ADMIN_NOTICES.get(notice, ""),
+        "error": error,
+        "has_saved_key": bool(saved),
+    }
+
+
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_view(request: Request, notice: str = "", _user=Depends(_require_auth)):
+    return templates.TemplateResponse(request, "admin.html", _admin_context(notice=notice))
+
+
+@app.post("/admin/openrouter-key", response_class=HTMLResponse)
+async def admin_save_openrouter_key(
+    request: Request,
+    openrouter_api_key: str = Form(""),
+    _user=Depends(_require_auth),
+):
+    try:
+        set_openrouter_api_key(openrouter_api_key)
+    except ValueError as exc:
+        # ValueError text is a fixed message and does not include the key.
+        log.info("Rejected OpenRouter API key save: %s", exc)
+        error = _BLANK_KEY_ERROR if "blank" in str(exc).lower() else str(exc)
+        return templates.TemplateResponse(
+            request,
+            "admin.html",
+            _admin_context(error=error),
+            status_code=400,
+        )
+    log.info("OpenRouter API key saved from the admin page")
+    return RedirectResponse("/admin?notice=saved", status_code=303)
+
+
+@app.post("/admin/openrouter-key/clear")
+async def admin_clear_openrouter_key(_user=Depends(_require_auth)):
+    clear_openrouter_api_key()
+    log.info("Saved OpenRouter API key cleared from the admin page")
+    return RedirectResponse("/admin?notice=cleared", status_code=303)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

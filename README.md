@@ -65,7 +65,7 @@ Open `.env` and set your API key:
 ANTHROPIC_API_KEY=sk-ant-api03-...
 ```
 
-To send every agent call through OpenRouter instead, set `OPENROUTER_API_KEY` and leave the Anthropic key unused. Dashed model ids such as `claude-sonnet-4-6` are mapped to OpenRouter slugs (`anthropic/claude-sonnet-4.6`). Set `AGENCYBILL_MODEL` to a full slug (`openai/gpt-4.1`) to use another model.
+To send every agent call through OpenRouter instead, set `OPENROUTER_API_KEY` and leave the Anthropic key unused. You can also save the key on the web Admin page (`/admin`); a saved key overrides the environment variable, and clearing it falls back to `OPENROUTER_API_KEY`. Dashed model ids such as `claude-sonnet-4-6` are mapped to OpenRouter slugs (`anthropic/claude-sonnet-4.6`). Set `AGENCYBILL_MODEL` to a full slug (`openai/gpt-4.1`) to use another model.
 
 All other variables have sensible defaults. See [Configuration](#configuration) for the full list.
 
@@ -366,7 +366,7 @@ All settings are controlled via environment variables (`.env` file):
 | Variable | Default | Description |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | — | Direct Anthropic key. Ignored when `OPENROUTER_API_KEY` is set |
-| `OPENROUTER_API_KEY` | — | Routes every agent LLM call through OpenRouter |
+| `OPENROUTER_API_KEY` | — | Fallback OpenRouter key. A key saved on the web Admin page (`/admin`) overrides this variable; clear it there to fall back. When the effective key is set, every agent LLM call uses OpenRouter |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api` | OpenRouter Messages API base URL |
 | `AGENCYBILL_MODEL` | `claude-sonnet-4-6` | Model id for all agents. OpenRouter accepts a full slug |
 | `AGENCYBILL_DB_PATH` | `data/agencybill.db` | Path to the SQLite database |

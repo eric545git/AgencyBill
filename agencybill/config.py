@@ -11,7 +11,7 @@ load_dotenv()
 BASE_DIR = Path(__file__).parent.parent
 
 ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
-# When set, every agent LLM call goes through OpenRouter instead of Anthropic directly.
+# Fallback OpenRouter key. A value saved from the web Admin page overrides this.
 OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL: str = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api").rstrip("/")
 DB_PATH: Path = BASE_DIR / os.getenv("AGENCYBILL_DB_PATH", "data/agencybill.db")
@@ -122,14 +122,30 @@ def openrouter_model_id(model: str) -> str:
     return f"anthropic/{model}"
 
 
+def _effective_openrouter_key() -> str:
+    """DB value saved from the Admin page, otherwise ``OPENROUTER_API_KEY``.
+
+    A missing database or settings table means there is no override. The key
+    itself is never logged.
+    """
+    from agencybill.settings_store import get_openrouter_api_key_override
+
+    override = get_openrouter_api_key_override()
+    if override:
+        return override
+    return (OPENROUTER_API_KEY or "").strip()
+
+
 def resolve_llm_settings() -> LLMSettings:
     """Choose OpenRouter when its key is set; otherwise the Anthropic API.
 
-    ``OPENROUTER_API_KEY`` wins when both keys are present so one variable
-    routes every agent call.
+    A key saved on the web Admin page overrides ``OPENROUTER_API_KEY``.
+    Clearing that saved value falls back to the environment variable.
+    When both the effective OpenRouter key and ``ANTHROPIC_API_KEY`` are
+    present, OpenRouter routes every agent call.
     """
-    openrouter_key = OPENROUTER_API_KEY.strip()
-    anthropic_key = ANTHROPIC_API_KEY.strip()
+    openrouter_key = _effective_openrouter_key()
+    anthropic_key = (ANTHROPIC_API_KEY or "").strip()
     model = MODEL.strip() or "claude-sonnet-4-6"
     if openrouter_key:
         base = (OPENROUTER_BASE_URL or "https://openrouter.ai/api").rstrip("/")

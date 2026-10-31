@@ -1,6 +1,7 @@
 """BaseAgent: agentic tool-use loop using the Anthropic Messages API.
 
-Calls go to Anthropic directly, or to OpenRouter when OPENROUTER_API_KEY is set.
+Calls go to Anthropic directly, or to OpenRouter when an OpenRouter key is
+configured. A key saved on the web Admin page overrides OPENROUTER_API_KEY.
 OpenRouter speaks the same Messages API, so every agent uses one client path.
 """
 
@@ -35,7 +36,8 @@ class BaseAgent:
         if not settings.configured:
             raise RuntimeError(
                 "No LLM API key is set. Set OPENROUTER_API_KEY or ANTHROPIC_API_KEY "
-                "in .env. When OPENROUTER_API_KEY is set, every agent call uses OpenRouter."
+                "in .env, or save an OpenRouter key on the web Admin page. "
+                "A saved key overrides OPENROUTER_API_KEY and routes every agent call through OpenRouter."
             )
         self.workflow_id = workflow_id
         self.llm = settings

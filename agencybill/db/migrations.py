@@ -40,6 +40,17 @@ MIGRATIONS: list[tuple[int, str, list[str]]] = [
             "CREATE INDEX IF NOT EXISTS idx_quotes_workflow ON quotes(workflow_id)",
         ],
     ),
+    (
+        2,
+        "app_settings for operator-managed secrets such as the OpenRouter API key",
+        [
+            """CREATE TABLE IF NOT EXISTS app_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT DEFAULT (datetime('now'))
+            )""",
+        ],
+    ),
 ]
 
 

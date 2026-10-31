@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Admin · AgencyBill{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+  <h1 class="text-2xl font-bold">Admin</h1>
+  <p class="text-base-content/60 text-sm">OpenRouter API key used for every agent LLM call</p>
+</div>
+
+{% if notice %}
+<div class="alert alert-success mb-4">
+  <span>{{ notice }}</span>
+</div>
+{% endif %}
+{% if error %}
+<div class="alert alert-error mb-4">
+  <span>{{ error }}</span>
+</div>
+{% endif %}
+
+<div id="llm-routing"
+     class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6"
+     data-provider="{{ provider }}"
+     data-model="{{ model }}">
+  <div class="stat bg-base-100 shadow rounded-box">
+    <div class="stat-title">Saved key</div>
+    <div id="openrouter-key-hint" class="stat-value text-lg font-mono">{{ saved_hint }}</div>
+    <div class="stat-desc">Database value. The full key is never shown.</div>
+  </div>
+  <div class="stat bg-base-100 shadow rounded-box">
+    <div class="stat-title">Environment fallback</div>
+    <div id="openrouter-env-hint" class="stat-value text-lg font-mono">{{ env_hint }}</div>
+    <div class="stat-desc">OPENROUTER_API_KEY, used when no key is saved</div>
+  </div>
+  <div class="stat bg-base-100 shadow rounded-box">
+    <div class="stat-title">Provider</div>
+    <div id="llm-provider-label" class="stat-value text-lg">{{ provider_label }}</div>
+    <div class="stat-desc">{{ source_label }}</div>
+  </div>
+  <div class="stat bg-base-100 shadow rounded-box">
+    <div class="stat-title">Resolved model</div>
+    <div id="llm-model-label" class="stat-value text-base font-mono break-all">{{ model }}</div>
+    <div class="stat-desc">What the next agent call will use</div>
+  </div>
+</div>
+
+<div class="card bg-base-100 shadow max-w-2xl">
+  <div class="card-body">
+    <h2 class="card-title text-lg">OpenRouter API key</h2>
+    <p class="text-sm text-base-content/70">
+      A saved key overrides the environment variable and sends every agent call
+      through OpenRouter. Clear it to fall back to <span class="font-mono">OPENROUTER_API_KEY</span>.
+      The key is stored in the local database and is not written to the audit log.
+    </p>
+
+    <form method="post" action="/admin/openrouter-key" class="mt-2">
+      <label class="form-control w-full" for="openrouter-api-key">
+        <div class="label">
+          <span class="label-text">New key</span>
+        </div>
+        <input id="openrouter-api-key"
+               type="password"
+               name="openrouter_api_key"
+               class="input input-bordered w-full font-mono"
+               autocomplete="off"
+               spellcheck="false"
+               autofocus
+               placeholder="sk-or-v1-..." />
+        <div class="label">
+          <span class="label-text-alt">Saving a blank value is rejected. Use Clear to remove the saved key.</span>
+        </div>
+      </label>
+      <div class="card-actions justify-end mt-4 gap-2">
+        <button type="submit" class="btn btn-primary">Save key</button>
+      </div>
+    </form>
+
+    <form method="post" action="/admin/openrouter-key/clear" class="mt-2">
+      <button type="submit" class="btn btn-outline btn-error" {% if not has_saved_key %}disabled{% endif %}>
+        Clear saved key
+      </button>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

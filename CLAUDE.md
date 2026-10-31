@@ -126,7 +126,7 @@ The `dedup_key` format is `"alert_type:entity_id"`. Never include timestamps in 
 | Variable | Default | Notes |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | — | Direct Anthropic key. Used when `OPENROUTER_API_KEY` is empty |
-| `OPENROUTER_API_KEY` | — | When set, every agent LLM call uses OpenRouter instead of Anthropic |
+| `OPENROUTER_API_KEY` | — | Fallback OpenRouter key. The web Admin page (`/admin`) can save a key that overrides this variable; clearing the saved key falls back here. A non-empty effective key sends every agent LLM call through OpenRouter |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api` | Anthropic Messages-compatible OpenRouter base URL |
 | `AGENCYBILL_MODEL` | `claude-sonnet-4-6` | Anthropic id, or an OpenRouter slug. Dashed ids map to `anthropic/claude-sonnet-4.6` on OpenRouter |
 | `AGENCYBILL_DB_PATH` | `data/agencybill.db` | Relative to project root |
@@ -140,7 +140,7 @@ The `dedup_key` format is `"alert_type:entity_id"`. Never include timestamps in 
 
 **`ModuleNotFoundError: agencybill`** — Run `pip install -e .` from the project root.
 
-**No LLM API key** — Set `OPENROUTER_API_KEY` or `ANTHROPIC_API_KEY` in `.env`. `config.py` calls `load_dotenv()` which reads `.env` relative to the working directory. A non-empty OpenRouter key routes every agent call through OpenRouter.
+**No LLM API key** — Set `OPENROUTER_API_KEY` or `ANTHROPIC_API_KEY` in `.env`, or save an OpenRouter key on the web Admin page (`/admin`). `config.py` calls `load_dotenv()` which reads `.env` relative to the working directory. A saved key overrides `OPENROUTER_API_KEY`. A non-empty effective OpenRouter key routes every agent call through OpenRouter.
 
 **Workflow stuck at a HITL checkpoint in web mode** — Navigate to `/queue` in the browser and submit a decision. The background thread polls the DB and will resume within 2 seconds.
 
