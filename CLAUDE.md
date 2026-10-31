@@ -128,7 +128,7 @@ The `dedup_key` format is `"alert_type:entity_id"`. Never include timestamps in 
 | `ANTHROPIC_API_KEY` | — | Direct Anthropic key. Used when `OPENROUTER_API_KEY` is empty |
 | `OPENROUTER_API_KEY` | — | Fallback OpenRouter key. The web Admin page (`/admin`) can save a key that overrides this variable; clearing the saved key falls back here. A non-empty effective key sends every agent LLM call through OpenRouter |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api` | Anthropic Messages-compatible OpenRouter base URL |
-| `AGENCYBILL_MODEL` | `claude-sonnet-4-6` | Anthropic id, or an OpenRouter slug. Dashed ids map to `anthropic/claude-sonnet-4.6` on OpenRouter |
+| `AGENCYBILL_MODEL` | `claude-sonnet-4-6` | Fallback model id. The Admin page (`/admin`) can save a model that overrides this; clearing it falls back here. Dashed ids map to `anthropic/claude-sonnet-4.6` on OpenRouter |
 | `AGENCYBILL_DB_PATH` | `data/agencybill.db` | Relative to project root |
 | `AGENCYBILL_OUTPUT_DIR` | `output` | Relative to project root |
 | `AGENCYBILL_MAX_AGENT_TURNS` | `20` | Increase if complex accounts run out of turns |

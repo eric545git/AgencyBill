@@ -1,7 +1,8 @@
 """Small key/value settings stored in SQLite.
 
-The OpenRouter API key saved from the web Admin page lives here. It overrides
-the ``OPENROUTER_API_KEY`` environment variable until an operator clears it.
+The OpenRouter API key and model id saved from the web Admin page live here.
+A saved key overrides ``OPENROUTER_API_KEY``. A saved model overrides
+``AGENCYBILL_MODEL``. Clearing either value falls back to the environment.
 Values are never logged.
 """
 
@@ -11,7 +12,9 @@ import sqlite3
 from pathlib import Path
 
 OPENROUTER_API_KEY_SETTING = "openrouter_api_key"
+LLM_MODEL_SETTING = "llm_model"
 _MAX_KEY_LENGTH = 512
+_MAX_MODEL_LENGTH = 200
 
 
 def mask_api_key(api_key: str | None) -> str:
@@ -33,6 +36,48 @@ def get_openrouter_api_key_override() -> str | None:
     None covers a missing database file, a database that has not been migrated
     yet, a missing row, and a blank value. Callers then use the env var.
     """
+    return _get_setting(OPENROUTER_API_KEY_SETTING)
+
+
+def get_model_override() -> str | None:
+    """Non-empty saved model id, or None so callers use ``AGENCYBILL_MODEL``."""
+    return _get_setting(LLM_MODEL_SETTING)
+
+
+def set_openrouter_api_key(api_key: str) -> None:
+    """Replace the saved OpenRouter key. Blank input is rejected."""
+    value = (api_key or "").strip()
+    if not value:
+        raise ValueError("OpenRouter API key cannot be blank")
+    if len(value) > _MAX_KEY_LENGTH:
+        raise ValueError("OpenRouter API key is too long")
+    _set_setting(OPENROUTER_API_KEY_SETTING, value)
+
+
+def clear_openrouter_api_key() -> None:
+    """Remove the saved key so routing falls back to the environment."""
+    _delete_setting(OPENROUTER_API_KEY_SETTING)
+
+
+def set_model(model: str) -> None:
+    """Replace the saved model id. Blank input is rejected."""
+    value = (model or "").strip()
+    if not value:
+        raise ValueError("Model cannot be blank")
+    if any(ch.isspace() for ch in value):
+        raise ValueError("Model id cannot contain spaces")
+    if len(value) > _MAX_MODEL_LENGTH:
+        raise ValueError("Model id is too long")
+    _set_setting(LLM_MODEL_SETTING, value)
+
+
+def clear_model() -> None:
+    """Remove the saved model so calls fall back to ``AGENCYBILL_MODEL``."""
+    _delete_setting(LLM_MODEL_SETTING)
+
+
+def _get_setting(key: str) -> str | None:
+    """Non-empty saved value, or None when there is no override."""
     conn = _connect_readonly()
     if conn is None:
         return None
@@ -44,7 +89,7 @@ def get_openrouter_api_key_override() -> str | None:
             return None
         row = conn.execute(
             "SELECT value FROM app_settings WHERE key = ?",
-            (OPENROUTER_API_KEY_SETTING,),
+            (key,),
         ).fetchone()
     finally:
         conn.close()
@@ -54,13 +99,7 @@ def get_openrouter_api_key_override() -> str | None:
     return value or None
 
 
-def set_openrouter_api_key(api_key: str) -> None:
-    """Replace the saved OpenRouter key. Blank input is rejected."""
-    value = (api_key or "").strip()
-    if not value:
-        raise ValueError("OpenRouter API key cannot be blank")
-    if len(value) > _MAX_KEY_LENGTH:
-        raise ValueError("OpenRouter API key is too long")
+def _set_setting(key: str, value: str) -> None:
     from agencybill.database import db
 
     with db() as conn:
@@ -70,19 +109,15 @@ def set_openrouter_api_key(api_key: str) -> None:
                ON CONFLICT(key) DO UPDATE SET
                  value = excluded.value,
                  updated_at = datetime('now')""",
-            (OPENROUTER_API_KEY_SETTING, value),
+            (key, value),
         )
 
 
-def clear_openrouter_api_key() -> None:
-    """Remove the saved key so routing falls back to the environment."""
+def _delete_setting(key: str) -> None:
     from agencybill.database import db
 
     with db() as conn:
-        conn.execute(
-            "DELETE FROM app_settings WHERE key = ?",
-            (OPENROUTER_API_KEY_SETTING,),
-        )
+        conn.execute("DELETE FROM app_settings WHERE key = ?", (key,))
 
 
 def _connect_readonly() -> sqlite3.Connection | None:

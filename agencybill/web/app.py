@@ -16,9 +16,12 @@ import agencybill.config as cfg
 from agencybill.config import PHASES, WEB_PASSWORD, WEB_USER, llm_footer_label, phase_pct
 from agencybill.database import init_db, db, row_to_dict
 from agencybill.settings_store import (
+    clear_model,
     clear_openrouter_api_key,
+    get_model_override,
     get_openrouter_api_key_override,
     mask_api_key,
+    set_model,
     set_openrouter_api_key,
 )
 from agencybill.logging_config import get_logger
@@ -336,14 +339,23 @@ async def res_alert(alert_id: str, _user=Depends(_require_auth)):
 _ADMIN_NOTICES = {
     "saved": "OpenRouter key saved. It overrides OPENROUTER_API_KEY for every agent call.",
     "cleared": "Saved OpenRouter key cleared. Routing falls back to the environment variable.",
+    "model_saved": "Model saved. It overrides AGENCYBILL_MODEL for every agent call.",
+    "model_cleared": "Saved model cleared. Calls fall back to AGENCYBILL_MODEL.",
 }
 _BLANK_KEY_ERROR = "Enter an OpenRouter API key to save it. Use Clear to remove a saved key."
+_MODEL_ERRORS = {
+    "blank": "Enter a model id to save it. Use Clear to fall back to AGENCYBILL_MODEL.",
+    "spaces": "Model id cannot contain spaces.",
+    "long": "Model id is too long.",
+}
 
 
 def _admin_context(notice: str = "", error: str = "") -> dict:
     """Template fields for /admin. The raw API key is never included."""
     saved = get_openrouter_api_key_override()
+    saved_model = get_model_override()
     env_key = (cfg.OPENROUTER_API_KEY or "").strip()
+    env_model = (cfg.MODEL or "").strip() or "claude-sonnet-4-6"
     settings = cfg.resolve_llm_settings()
     if settings.provider == "openrouter":
         provider_label = "OpenRouter"
@@ -365,10 +377,18 @@ def _admin_context(notice: str = "", error: str = "") -> dict:
         "provider": settings.provider,
         "provider_label": provider_label,
         "model": settings.model,
+        "configured_model": saved_model or env_model,
+        "env_model": env_model,
+        "model_source_label": (
+            "Saved model (overrides AGENCYBILL_MODEL)"
+            if saved_model
+            else "Environment variable AGENCYBILL_MODEL"
+        ),
         "source_label": source_label,
         "notice": _ADMIN_NOTICES.get(notice, ""),
         "error": error,
         "has_saved_key": bool(saved),
+        "has_saved_model": bool(saved_model),
     }
 
 
@@ -404,6 +424,42 @@ async def admin_clear_openrouter_key(_user=Depends(_require_auth)):
     clear_openrouter_api_key()
     log.info("Saved OpenRouter API key cleared from the admin page")
     return RedirectResponse("/admin?notice=cleared", status_code=303)
+
+
+@app.post("/admin/model", response_class=HTMLResponse)
+async def admin_save_model(
+    request: Request,
+    model: str = Form(""),
+    _user=Depends(_require_auth),
+):
+    try:
+        set_model(model)
+    except ValueError as exc:
+        log.info("Rejected model save: %s", exc)
+        message = str(exc).lower()
+        if "blank" in message:
+            error = _MODEL_ERRORS["blank"]
+        elif "spaces" in message:
+            error = _MODEL_ERRORS["spaces"]
+        elif "long" in message:
+            error = _MODEL_ERRORS["long"]
+        else:
+            error = "Could not save that model id."
+        return templates.TemplateResponse(
+            request,
+            "admin.html",
+            _admin_context(error=error),
+            status_code=400,
+        )
+    log.info("Model saved from the admin page")
+    return RedirectResponse("/admin?notice=model_saved", status_code=303)
+
+
+@app.post("/admin/model/clear")
+async def admin_clear_model(_user=Depends(_require_auth)):
+    clear_model()
+    log.info("Saved model cleared from the admin page")
+    return RedirectResponse("/admin?notice=model_cleared", status_code=303)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

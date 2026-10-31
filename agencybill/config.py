@@ -122,6 +122,16 @@ def openrouter_model_id(model: str) -> str:
     return f"anthropic/{model}"
 
 
+def _effective_model() -> str:
+    """Model id saved on the Admin page, otherwise ``AGENCYBILL_MODEL``."""
+    from agencybill.settings_store import get_model_override
+
+    override = get_model_override()
+    if override:
+        return override
+    return MODEL.strip() or "claude-sonnet-4-6"
+
+
 def _effective_openrouter_key() -> str:
     """DB value saved from the Admin page, otherwise ``OPENROUTER_API_KEY``.
 
@@ -140,13 +150,14 @@ def resolve_llm_settings() -> LLMSettings:
     """Choose OpenRouter when its key is set; otherwise the Anthropic API.
 
     A key saved on the web Admin page overrides ``OPENROUTER_API_KEY``.
-    Clearing that saved value falls back to the environment variable.
+    A model saved there overrides ``AGENCYBILL_MODEL``.
+    Clearing either saved value falls back to the environment variable.
     When both the effective OpenRouter key and ``ANTHROPIC_API_KEY`` are
     present, OpenRouter routes every agent call.
     """
     openrouter_key = _effective_openrouter_key()
     anthropic_key = (ANTHROPIC_API_KEY or "").strip()
-    model = MODEL.strip() or "claude-sonnet-4-6"
+    model = _effective_model()
     if openrouter_key:
         base = (OPENROUTER_BASE_URL or "https://openrouter.ai/api").rstrip("/")
         return LLMSettings(

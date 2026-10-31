@@ -4,7 +4,7 @@
 
 <div class="mb-6">
   <h1 class="text-2xl font-bold">Admin</h1>
-  <p class="text-base-content/60 text-sm">OpenRouter API key used for every agent LLM call</p>
+  <p class="text-base-content/60 text-sm">OpenRouter API key and model used for every agent LLM call</p>
 </div>
 
 {% if notice %}
@@ -22,25 +22,25 @@
      class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6"
      data-provider="{{ provider }}"
      data-model="{{ model }}">
-  <div class="stat bg-base-100 shadow rounded-box">
-    <div class="stat-title">Saved key</div>
-    <div id="openrouter-key-hint" class="stat-value text-lg font-mono">{{ saved_hint }}</div>
-    <div class="stat-desc">Database value. The full key is never shown.</div>
+  <div class="bg-base-100 shadow rounded-box p-4">
+    <div class="text-xs text-base-content/60">Saved key</div>
+    <div id="openrouter-key-hint" class="text-lg font-mono font-semibold mt-1">{{ saved_hint }}</div>
+    <div class="text-xs text-base-content/60 mt-1">Database value. The full key is never shown.</div>
   </div>
-  <div class="stat bg-base-100 shadow rounded-box">
-    <div class="stat-title">Environment fallback</div>
-    <div id="openrouter-env-hint" class="stat-value text-lg font-mono">{{ env_hint }}</div>
-    <div class="stat-desc">OPENROUTER_API_KEY, used when no key is saved</div>
+  <div class="bg-base-100 shadow rounded-box p-4">
+    <div class="text-xs text-base-content/60">Environment fallback</div>
+    <div id="openrouter-env-hint" class="text-lg font-mono font-semibold mt-1 break-all">{{ env_hint }}</div>
+    <div class="text-xs text-base-content/60 mt-1">OPENROUTER_API_KEY, used when no key is saved</div>
   </div>
-  <div class="stat bg-base-100 shadow rounded-box">
-    <div class="stat-title">Provider</div>
-    <div id="llm-provider-label" class="stat-value text-lg">{{ provider_label }}</div>
-    <div class="stat-desc">{{ source_label }}</div>
+  <div class="bg-base-100 shadow rounded-box p-4">
+    <div class="text-xs text-base-content/60">Provider</div>
+    <div id="llm-provider-label" class="text-lg font-semibold mt-1">{{ provider_label }}</div>
+    <div class="text-xs text-base-content/60 mt-1">{{ source_label }}</div>
   </div>
-  <div class="stat bg-base-100 shadow rounded-box">
-    <div class="stat-title">Resolved model</div>
-    <div id="llm-model-label" class="stat-value text-base font-mono break-all">{{ model }}</div>
-    <div class="stat-desc">What the next agent call will use</div>
+  <div class="bg-base-100 shadow rounded-box p-4">
+    <div class="text-xs text-base-content/60">Resolved model</div>
+    <div id="llm-model-label" class="text-base font-mono font-semibold mt-1 break-all">{{ model }}</div>
+    <div id="llm-model-source" class="text-xs text-base-content/60 mt-1">{{ model_source_label }}</div>
   </div>
 </div>
 
@@ -78,6 +78,48 @@
     <form method="post" action="/admin/openrouter-key/clear" class="mt-2">
       <button type="submit" class="btn btn-outline btn-error" {% if not has_saved_key %}disabled{% endif %}>
         Clear saved key
+      </button>
+    </form>
+  </div>
+</div>
+
+<div class="card bg-base-100 shadow max-w-2xl mt-6">
+  <div class="card-body">
+    <h2 class="card-title text-lg">Model</h2>
+    <p class="text-sm text-base-content/70">
+      A saved model overrides <span class="font-mono">AGENCYBILL_MODEL</span> for every agent call.
+      Use an Anthropic id such as <span class="font-mono">claude-sonnet-4-6</span> or an OpenRouter
+      slug such as <span class="font-mono">anthropic/claude-sonnet-4.6</span> or
+      <span class="font-mono">openai/gpt-4.1</span>. Dashed Anthropic ids are mapped to OpenRouter
+      slugs when OpenRouter is selected. Clear the saved model to fall back to
+      <span class="font-mono">{{ env_model }}</span>.
+    </p>
+
+    <form method="post" action="/admin/model" class="mt-2">
+      <label class="form-control w-full" for="llm-model">
+        <div class="label">
+          <span class="label-text">Model id</span>
+        </div>
+        <input id="llm-model"
+               type="text"
+               name="model"
+               value="{{ configured_model }}"
+               class="input input-bordered w-full font-mono"
+               autocomplete="off"
+               spellcheck="false"
+               placeholder="claude-sonnet-4-6" />
+        <div class="label">
+          <span class="label-text-alt">Saving a blank value is rejected. Use Clear to fall back to the environment variable.</span>
+        </div>
+      </label>
+      <div class="card-actions justify-end mt-4 gap-2">
+        <button type="submit" class="btn btn-primary">Save model</button>
+      </div>
+    </form>
+
+    <form method="post" action="/admin/model/clear" class="mt-2">
+      <button type="submit" class="btn btn-outline" {% if not has_saved_model %}disabled{% endif %}>
+        Clear saved model
       </button>
     </form>
   </div>

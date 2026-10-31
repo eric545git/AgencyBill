@@ -8,8 +8,10 @@ from agencybill.config import resolve_llm_settings
 from agencybill.database import db
 from agencybill.web.app import app
 from agencybill.settings_store import (
+    clear_model,
     clear_openrouter_api_key,
     mask_api_key,
+    set_model,
     set_openrouter_api_key,
 )
 
@@ -150,6 +152,7 @@ def test_admin_route_requires_existing_basic_auth(tmp_db, monkeypatch):
     monkeypatch.setattr(webapp, "WEB_USER", "agencybill")
     monkeypatch.setattr(cfg, "OPENROUTER_API_KEY", "")
     monkeypatch.setattr(cfg, "ANTHROPIC_API_KEY", "sk-ant-direct")
+    monkeypatch.setattr(cfg, "MODEL", "claude-sonnet-4-6")
 
     client = TestClient(webapp.app)
     denied = client.get("/admin")
@@ -165,3 +168,62 @@ def test_admin_route_requires_existing_basic_auth(tmp_db, monkeypatch):
     allowed = client.get("/admin", auth=("agencybill", "secret"))
     assert allowed.status_code == 200
     assert "Admin" in allowed.text
+    denied_model = client.post("/admin/model", data={"model": "openai/gpt-4.1"})
+    assert denied_model.status_code == 401
+    assert resolve_llm_settings().model == "claude-sonnet-4-6"
+
+
+def test_saved_model_overrides_env_and_admin_field_updates_it(tmp_db, monkeypatch):
+    monkeypatch.setattr(cfg, "OPENROUTER_API_KEY", _ENV_KEY)
+    monkeypatch.setattr(cfg, "ANTHROPIC_API_KEY", "sk-ant-direct")
+    monkeypatch.setattr(cfg, "MODEL", "claude-sonnet-4-6")
+
+    set_model("claude-opus-4-7")
+    settings = resolve_llm_settings()
+    assert settings.model == "anthropic/claude-opus-4.7"
+    assert settings.provider == "openrouter"
+
+    agent = BaseAgent("wf-model")
+    assert agent.llm.model == "anthropic/claude-opus-4.7"
+
+    clear_model()
+    assert resolve_llm_settings().model == "anthropic/claude-sonnet-4.6"
+
+    client = TestClient(app)
+    page = client.get("/admin")
+    assert page.status_code == 200
+    assert 'id="llm-model"' in page.text
+    assert 'name="model"' in page.text
+    assert 'value="claude-sonnet-4-6"' in page.text
+    assert "Environment variable AGENCYBILL_MODEL" in page.text
+
+    blank = client.post("/admin/model", data={"model": "  "})
+    assert blank.status_code == 400
+    assert "Enter a model id" in blank.text
+    assert resolve_llm_settings().model == "anthropic/claude-sonnet-4.6"
+
+    spaced = client.post("/admin/model", data={"model": "claude sonnet"})
+    assert spaced.status_code == 400
+    assert "cannot contain spaces" in spaced.text
+
+    saved = client.post(
+        "/admin/model",
+        data={"model": "openai/gpt-4.1"},
+        follow_redirects=False,
+    )
+    assert saved.status_code == 303
+    assert saved.headers["location"] == "/admin?notice=model_saved"
+    assert resolve_llm_settings().model == "openai/gpt-4.1"
+
+    shown = client.get("/admin?notice=model_saved")
+    assert "Model saved" in shown.text
+    assert 'value="openai/gpt-4.1"' in shown.text
+    assert "Saved model (overrides AGENCYBILL_MODEL)" in shown.text
+    assert "OpenRouter · openai/gpt-4.1" in shown.text
+
+    cleared = client.post("/admin/model/clear", follow_redirects=False)
+    assert cleared.status_code == 303
+    assert resolve_llm_settings().model == "anthropic/claude-sonnet-4.6"
+    after = client.get(cleared.headers["location"])
+    assert "Saved model cleared" in after.text
+    assert 'value="claude-sonnet-4-6"' in after.text
