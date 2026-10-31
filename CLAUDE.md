@@ -41,7 +41,16 @@ The `WorkflowOrchestrator` accepts `web_mode=bool`. In web mode:
 
 Phase 4 (`MarketSubmissionAgent`) selects markets from the `markets` table based on attorney count, state, premium, and practice areas, creates a `market_submissions` record per market with a `follow_up_at` deadline, and sends simulated submission emails.
 
-Phase 5 (`QuoteCollectionAgent`) reads received quotes from `market_quotes` (entered by humans via the web UI `POST /workflows/{id}/record-quote`), compares them, calls `accept_market_quote()` on the winner, and the `quotes` table record written there is what downstream agents (`BindingAgent`, `InvoicingAgent`) read.
+Phase 5 (`QuoteCollectionAgent`) reads received quotes from `market_quotes` (entered by humans via the web UI `POST /workflows/{id}/record-quote`), compares them, and calls `recommend_market_quote()` on the preferred option — **it does not accept yet**. After the QUOTE_COLLECTION post-checkpoint confirms (or the AM picks an alternate via `POST /workflows/{id}/select-quote`), the orchestrator calls `accept_market_quote()`. The `quotes` table record written there is what downstream agents (`BindingAgent`, `InvoicingAgent`) read.
+
+### AM Decision Cockpit
+
+`agencybill/tools/workbench_tools.py` powers the account-manager workbench:
+- Ranked `/queue` with urgency scoring (expiry, wait age, alerts, premium, phase)
+- Decision cards with claims/risk chips, one-click Accept/Hold/Decline, and alternate quote picker
+- After a decision, redirect advances to the next urgent queue item (`queue_next`)
+- Morning brief tiles deep-link to `/worklists/{kind}` (expiring, stale apps, market follow-ups, remittances, paused)
+- Paused workflows show a labeled resume CTA derived from `notes` / phase via `pause_context()`
 
 ### Alert System
 
@@ -78,6 +87,7 @@ agencybill/
     application_tools.py  get_application (shared)
     market_tools.py       … recommend_market_quote, accept_market_quote, mark_submission_bound
     payment_tools.py      … resolve_commission_pct, create_remittance
+    workbench_tools.py    urgency ranking, decision enrichment, morning brief, worklists
     (+ policy/firm/claims/document/notification/audit/alerts tools)
 
   db/

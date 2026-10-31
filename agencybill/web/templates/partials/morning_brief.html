@@ -13,25 +13,34 @@
         <div class="text-xs text-base-content/50">Decisions</div>
         <div class="text-xl font-bold {% if brief.decisions_waiting %}text-error{% endif %}">{{ brief.decisions_waiting }}</div>
       </a>
-      <a href="/policies" class="rounded-lg bg-base-200/70 px-3 py-2 hover:bg-base-200 transition">
+      <a href="/worklists/expiring_14" class="rounded-lg bg-base-200/70 px-3 py-2 hover:bg-base-200 transition">
         <div class="text-xs text-base-content/50">Expire ≤14d</div>
         <div class="text-xl font-bold {% if brief.expiring_14 %}text-error{% endif %}">{{ brief.expiring_14 }}</div>
       </a>
-      <a href="/policies" class="rounded-lg bg-base-200/70 px-3 py-2 hover:bg-base-200 transition">
+      <a href="/worklists/expiring_30" class="rounded-lg bg-base-200/70 px-3 py-2 hover:bg-base-200 transition">
         <div class="text-xs text-base-content/50">Expire ≤30d</div>
         <div class="text-xl font-bold {% if brief.expiring_30 %}text-warning{% endif %}">{{ brief.expiring_30 }}</div>
       </a>
-      <div class="rounded-lg bg-base-200/70 px-3 py-2">
+      <a href="/worklists/stale_apps" class="rounded-lg bg-base-200/70 px-3 py-2 hover:bg-base-200 transition">
         <div class="text-xs text-base-content/50">Stale apps</div>
         <div class="text-xl font-bold {% if brief.stale_applications %}text-warning{% endif %}">{{ brief.stale_applications }}</div>
-      </div>
-      <div class="rounded-lg bg-base-200/70 px-3 py-2">
+      </a>
+      <a href="/worklists/market_followups" class="rounded-lg bg-base-200/70 px-3 py-2 hover:bg-base-200 transition">
         <div class="text-xs text-base-content/50">Market follow-ups</div>
         <div class="text-xl font-bold {% if brief.quotes_waiting %}text-warning{% endif %}">{{ brief.quotes_waiting }}</div>
-      </div>
+      </a>
       <a href="/alerts" class="rounded-lg bg-base-200/70 px-3 py-2 hover:bg-base-200 transition">
         <div class="text-xs text-base-content/50">Critical alerts</div>
         <div class="text-xl font-bold {% if brief.critical_alerts %}text-error{% endif %}">{{ brief.critical_alerts }}</div>
+      </a>
+    </div>
+
+    <div class="flex flex-wrap gap-3 mb-4 text-xs">
+      <a href="/worklists/remittances_due" class="link link-hover">
+        Remittances due: <span class="font-semibold">{{ brief.remittances_due }}</span>
+      </a>
+      <a href="/worklists/paused" class="link link-hover">
+        Paused workflows: <span class="font-semibold">{{ brief.paused }}</span>
       </a>
     </div>
 
@@ -55,7 +64,7 @@
           </div>
           <div class="flex gap-2 shrink-0">
             <a href="/workflows/{{ cp.workflow_id }}" class="btn btn-xs btn-ghost">Context</a>
-            <a href="/queue" class="btn btn-xs btn-warning">Decide</a>
+            <a href="/queue#cp-{{ cp.id }}" class="btn btn-xs btn-warning">Decide</a>
           </div>
         </li>
         {% endfor %}

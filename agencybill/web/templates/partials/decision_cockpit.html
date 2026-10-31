@@ -1,4 +1,4 @@
-{# Rich AM decision card. Expects: cp (enriched checkpoint), optional next_url, compact bool #}
+{# Rich AM decision card. Expects: cp, optional next_url, optional flash #}
 {% set band = cp.urgency_band or 'medium' %}
 {% set band_border = {
   'critical': 'border-error',
@@ -12,8 +12,9 @@
   'medium': 'badge-info',
   'low': 'badge-ghost'
 }[band] %}
+{% set rec_key = (cp.recommendation.decision if cp.recommendation and cp.recommendation.kind == 'underwriting' else 'accept') %}
 
-<div class="card bg-base-100 shadow border-l-4 {{ band_border }}">
+<div id="cp-{{ cp.id }}" class="card bg-base-100 shadow border-l-4 {{ band_border }}">
   <div class="card-body p-5 gap-3">
 
     <div class="flex flex-wrap items-start justify-between gap-3">
@@ -33,7 +34,7 @@
             {% endif %}
           {% endif %}
           {% if cp.critical_alerts %}
-          <span class="badge badge-error badge-sm">{{ cp.critical_alerts }} critical alert{{ 's' if cp.critical_alerts != 1 else '' }}</span>
+          <span class="badge badge-error badge-sm">{{ cp.critical_alerts }} critical</span>
           {% endif %}
         </div>
         <h3 class="text-lg font-semibold leading-tight">{{ cp.firm_name }}</h3>
@@ -43,6 +44,31 @@
           {% if cp.firm_state %} · {{ cp.firm_state }}{% endif %}
           {% if cp.annual_premium %} · expiring {{ cp.annual_premium | currency }}/yr{% endif %}
         </p>
+
+        {% if cp.risk %}
+        <div class="flex flex-wrap gap-1.5 mt-2">
+          <span class="badge badge-ghost badge-sm">
+            {{ cp.risk.total_claims }} claim{{ 's' if cp.risk.total_claims != 1 else '' }} / 5yr
+          </span>
+          {% if cp.risk.open_claims %}
+          <span class="badge badge-warning badge-sm">{{ cp.risk.open_claims }} open</span>
+          {% endif %}
+          {% if cp.risk.total_incurred %}
+          <span class="badge badge-ghost badge-sm">{{ cp.risk.total_incurred | currency }} incurred</span>
+          {% endif %}
+          {% if cp.risk.risk_score is not none %}
+          <span class="badge badge-sm
+            {% if cp.risk.risk_score >= 7 %}badge-error
+            {% elif cp.risk.risk_score >= 5 %}badge-warning
+            {% else %}badge-success{% endif %}">
+            Risk {{ cp.risk.risk_score }}
+          </span>
+          {% endif %}
+          {% if cp.risk.uw_decision %}
+          <span class="badge badge-outline badge-sm">UW {{ cp.risk.uw_decision }}</span>
+          {% endif %}
+        </div>
+        {% endif %}
       </div>
       <div class="text-right shrink-0">
         <div class="text-xs text-base-content/40">Urgency</div>
@@ -69,21 +95,70 @@
     </div>
     {% endif %}
 
-    <form method="post" action="/queue/{{ cp.id }}/decide" class="mt-1">
-      {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}" />{% endif %}
-      <div class="flex flex-wrap gap-2 mb-3">
+    {# Alternate quote picker for quote-collection HITL #}
+    {% if cp.phase == 'QUOTE_COLLECTION' and cp.alternate_quotes %}
+    <div class="rounded-lg border border-base-200 overflow-hidden">
+      <div class="px-3 py-2 bg-base-200/50 text-xs font-semibold text-base-content/50 uppercase tracking-wide">
+        Choose a quote (select &amp; accept in one step)
+      </div>
+      <div class="overflow-x-auto">
+        <table class="table table-xs">
+          <thead>
+            <tr class="text-xs text-base-content/40">
+              <th>Market</th><th>Premium</th><th>Δ vs expiring</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for q in cp.alternate_quotes %}
+            <tr class="{% if q.is_recommended %}bg-primary/5{% endif %}">
+              <td>
+                <div class="font-medium">{{ q.market_name }}</div>
+                {% if q.carrier %}<div class="text-[10px] text-base-content/50">{{ q.carrier }}</div>{% endif %}
+                {% if q.is_recommended %}<span class="badge badge-primary badge-xs">Current pick</span>{% endif %}
+              </td>
+              <td class="font-semibold">{{ q.annual_premium | currency }}/yr</td>
+              <td class="text-xs">
+                {% if q.delta_vs_expiring is not none %}
+                  <span class="{% if q.delta_vs_expiring > 0 %}text-warning{% elif q.delta_vs_expiring < 0 %}text-success{% endif %}">
+                    {% if q.delta_vs_expiring > 0 %}+{% endif %}{{ q.delta_vs_expiring | currency }}
+                  </span>
+                {% else %}—{% endif %}
+              </td>
+              <td class="text-right">
+                <form method="post" action="/workflows/{{ cp.workflow_id }}/select-quote" class="inline">
+                  <input type="hidden" name="market_quote_id" value="{{ q.id }}" />
+                  <input type="hidden" name="checkpoint_id" value="{{ cp.id }}" />
+                  <input type="hidden" name="action" value="accept" />
+                  <input type="hidden" name="next" value="{{ next_url or 'queue_next' }}" />
+                  <button type="submit" class="btn btn-xs {% if q.is_recommended %}btn-primary{% else %}btn-outline{% endif %}">
+                    {% if q.is_recommended %}Accept this{% else %}Use &amp; accept{% endif %}
+                  </button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    {# One-click decisions #}
+    <form method="post" action="/queue/{{ cp.id }}/decide" class="mt-1" id="decide-{{ cp.id }}">
+      <input type="hidden" name="next" value="{{ next_url or 'queue_next' }}" />
+      <div class="flex flex-wrap gap-2 mb-2">
         {% for opt in cp.options or [] %}
-        <label class="cursor-pointer">
-          <input type="radio" name="decision" value="{{ opt.key if opt is mapping else opt }}" class="sr-only peer" required />
-          <span class="btn btn-sm peer-checked:btn-primary btn-outline">{{ opt.label if opt is mapping else opt }}</span>
-        </label>
+          {% set key = opt.key if opt is mapping else opt %}
+          {% set label = opt.label if opt is mapping else opt %}
+          {% set is_primary = (key == 'accept' or key == 'confirm' or key == rec_key) %}
+          <button type="submit" name="decision" value="{{ key }}"
+                  class="btn btn-sm {% if is_primary %}btn-primary{% elif key in ('decline','cancel') %}btn-outline btn-error{% else %}btn-outline{% endif %}">
+            {{ label }}
+          </button>
         {% endfor %}
       </div>
-      <div class="flex flex-wrap gap-2 items-center">
-        <input type="text" name="notes" placeholder="Optional notes / override reason…"
-               class="input input-bordered input-sm flex-1 min-w-[12rem]" />
-        <button type="submit" class="btn btn-primary btn-sm">Submit decision</button>
-      </div>
+      <input type="text" name="notes" placeholder="Optional notes / override reason…"
+             class="input input-bordered input-sm w-full max-w-md" />
     </form>
 
     <p class="text-xs text-base-content/40">

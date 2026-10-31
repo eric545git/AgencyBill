@@ -6,7 +6,7 @@
   <div>
     <h1 class="text-2xl font-bold">Decision Queue</h1>
     <p class="text-base-content/60 text-sm">
-      Ranked by urgency — expiry risk, stale wait time, alerts, and premium at stake.
+      Ranked by urgency — one-click decide advances you to the next item.
     </p>
   </div>
   <div class="join">
@@ -28,10 +28,21 @@
   </div>
 </div>
 
+{% if cleared %}
+<div class="alert alert-success mb-4">
+  <span>Queue cleared — nice work. Check the morning brief for follow-ups.</span>
+  <a href="/" class="btn btn-sm">Dashboard</a>
+</div>
+{% elif remaining %}
+<div class="alert alert-info mb-4 py-2">
+  <span class="text-sm">Decision recorded · {{ remaining }} remaining</span>
+</div>
+{% endif %}
+
 {% if checkpoints %}
 <div class="flex flex-col gap-4">
   {% for cp in checkpoints %}
-    {% set next_url = '/queue' + (('?band=' + filter_band) if filter_band else '') %}
+    {% set next_url = 'queue_next' %}
     {% include "partials/decision_cockpit.html" %}
   {% endfor %}
 </div>
@@ -40,17 +51,13 @@
   <div class="card-body text-center py-16">
     <h2 class="text-xl font-semibold">Queue is clear</h2>
     <p class="text-base-content/50">No workflows are waiting for a human decision right now.</p>
-    <div class="mt-4">
+    <div class="mt-4 flex justify-center gap-2">
       <a href="/" class="btn btn-ghost">Dashboard</a>
-      <a href="/workflows" class="btn btn-ghost">Workflows</a>
+      <a href="/worklists/paused" class="btn btn-ghost">Paused workflows</a>
+      <a href="/worklists/market_followups" class="btn btn-ghost">Market follow-ups</a>
     </div>
   </div>
 </div>
-{% endif %}
-
-{% if checkpoints %}
-<div hx-trigger="every 15s" hx-get="/queue{% if filter_band %}?band={{ filter_band }}{% endif %}"
-     hx-target="body" hx-push-url="false" hx-swap="innerHTML"></div>
 {% endif %}
 
 {% endblock %}

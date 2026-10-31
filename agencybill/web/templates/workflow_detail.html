@@ -20,15 +20,32 @@
     </p>
   </div>
   <div class="flex gap-2">
-    {% if wf.status not in ('complete','non_renewal','declined','cancelled') and wf.id not in [] %}
+    {% if wf.status not in ('complete','non_renewal','declined','cancelled') %}
     <form method="post" action="/workflows/start">
       <input type="hidden" name="policy_id" value="{{ wf.policy_id }}" />
-      <button class="btn btn-primary btn-sm">▶ Run / Resume</button>
+      <button class="btn btn-primary btn-sm">
+        {{ pause.resume_label if pause and wf.status == 'paused' else 'Run / Resume' }}
+      </button>
     </form>
     {% endif %}
+    <a href="/queue" class="btn btn-ghost btn-sm">Decisions</a>
     <a href="/workflows" class="btn btn-ghost btn-sm">← Back</a>
   </div>
 </div>
+
+{% if wf.status == 'paused' and pause %}
+<div class="alert alert-warning mb-4">
+  <div>
+    <div class="font-bold">Paused — {{ pause.resume_label }}</div>
+    <div class="text-sm">{{ pause.reason }}</div>
+    {% if pause.hint %}<div class="text-xs opacity-70 mt-1">{{ pause.hint }}</div>{% endif %}
+  </div>
+  <form method="post" action="/workflows/start">
+    <input type="hidden" name="policy_id" value="{{ wf.policy_id }}" />
+    <button class="btn btn-sm btn-warning">{{ pause.resume_label }}</button>
+  </form>
+</div>
+{% endif %}
 
 <!-- Live status bar — polls every 4s while agent is running -->
 <div id="wf-status-partial"
@@ -56,7 +73,7 @@
 {% if pending_cp %}
 <div class="mb-4">
   {% set cp = pending_cp %}
-  {% set next_url = '/workflows/' + wf.id %}
+  {% set next_url = 'queue_next' %}
   {% include "partials/decision_cockpit.html" %}
 </div>
 {% endif %}

@@ -26,6 +26,7 @@ from agencybill.tools.payment_tools import get_invoices_for_workflow, get_remitt
 from agencybill.tools.notification_tools import get_notifications
 from agencybill.tools.market_tools import (
     get_submissions, get_market_quotes, record_market_quote,
+    recommend_market_quote,
 )
 from agencybill.tools.alerts_tools import (
     get_alerts, count_open_alerts, acknowledge_alert, resolve_alert,
@@ -33,6 +34,7 @@ from agencybill.tools.alerts_tools import (
 )
 from agencybill.tools.workbench_tools import (
     list_pending_decisions, morning_brief, enrich_market_quotes, days_until,
+    next_pending_after, pause_context, get_worklist,
 )
 from agencybill.web import worker
 
@@ -174,7 +176,6 @@ async def workflow_detail(request: Request, workflow_id: str, _user=Depends(_req
         (c for c in list_pending_decisions(ranked=False) if c["workflow_id"] == workflow_id),
         None,
     )
-    # Fallback if enrichment missed a raw checkpoint
     if pending_cp is None:
         raw = next((c for c in checkpts if not c.get("decision")), None)
         pending_cp = raw
@@ -195,6 +196,7 @@ async def workflow_detail(request: Request, workflow_id: str, _user=Depends(_req
         "pending_cp": pending_cp,
         "worker_status": worker_status,
         "days_to_expiry": days_until(policy.get("expiration_date")),
+        "pause": pause_context(wf),
     })
 
 
@@ -203,7 +205,8 @@ async def workflow_detail(request: Request, workflow_id: str, _user=Depends(_req
 # ─────────────────────────────────────────────────────────────────────────────
 
 @app.get("/queue", response_class=HTMLResponse)
-async def queue_view(request: Request, band: str = "", _user=Depends(_require_auth)):
+async def queue_view(request: Request, band: str = "", cleared: str = "",
+                     remaining: str = "", _user=Depends(_require_auth)):
     all_cps = list_pending_decisions(ranked=True)
     counts = {
         "all": len(all_cps),
@@ -217,7 +220,27 @@ async def queue_view(request: Request, band: str = "", _user=Depends(_require_au
         "checkpoints": checkpoints,
         "filter_band": band,
         "counts": counts,
+        "cleared": cleared == "1",
+        "remaining": remaining,
     })
+
+
+def _redirect_after_decision(next_value: str, band: str = "") -> RedirectResponse:
+    """Send AM to next urgent decision, or a specific path, after resolving HITL."""
+    if next_value == "queue_next" or next_value == "" or next_value.startswith("/queue"):
+        # Preserve band filter if embedded in next_value
+        if "band=" in (next_value or ""):
+            from urllib.parse import parse_qs, urlparse
+            qs = parse_qs(urlparse(next_value).query)
+            band = (qs.get("band") or [band])[0]
+        nxt = next_pending_after("", band=band)
+        if nxt:
+            suffix = f"?band={band}&remaining={len(list_pending_decisions(ranked=False))}" if band else f"?remaining={len(list_pending_decisions(ranked=False))}"
+            return RedirectResponse(f"/queue{suffix}#cp-{nxt['id']}", status_code=303)
+        return RedirectResponse("/queue?cleared=1", status_code=303)
+    if next_value.startswith("/"):
+        return RedirectResponse(next_value, status_code=303)
+    return RedirectResponse("/queue", status_code=303)
 
 
 @app.post("/queue/{checkpoint_id}/decide", response_class=HTMLResponse)
@@ -226,22 +249,46 @@ async def decide_checkpoint(
     checkpoint_id: str,
     decision: str = Form(...),
     notes: str = Form(""),
-    next: str = Form(""),
+    next: str = Form("queue_next"),
     _user=Depends(_require_auth),
 ):
     resolve_checkpoint(checkpoint_id, decision, notes=notes)
-    with db() as conn:
-        row = conn.execute(
-            "SELECT workflow_id FROM human_checkpoints WHERE id = ?",
-            (checkpoint_id,),
-        ).fetchone()
-    wf_id = row["workflow_id"] if row else None
-    # Allow in-context decide to return to workflow or stay on queue
-    if next and next.startswith("/"):
-        return RedirectResponse(next, status_code=303)
-    if wf_id:
-        return RedirectResponse(f"/workflows/{wf_id}", status_code=303)
-    return RedirectResponse("/queue", status_code=303)
+    return _redirect_after_decision(next)
+
+
+@app.post("/workflows/{workflow_id}/select-quote")
+async def select_quote(
+    workflow_id: str,
+    market_quote_id: str = Form(...),
+    checkpoint_id: str = Form(""),
+    action: str = Form("accept"),
+    next: str = Form("queue_next"),
+    notes: str = Form(""),
+    _user=Depends(_require_auth),
+):
+    """AM picks an alternate market quote from the cockpit; optionally accept HITL."""
+    result = recommend_market_quote(
+        market_quote_id, workflow_id, rationale=notes or "Selected by account manager"
+    )
+    if result.get("error"):
+        raise HTTPException(400, result["error"])
+    if action == "accept" and checkpoint_id:
+        resolve_checkpoint(checkpoint_id, "accept", notes=notes or "Accepted alternate quote")
+        return _redirect_after_decision(next)
+    return RedirectResponse(f"/workflows/{workflow_id}", status_code=303)
+
+
+@app.get("/worklists/{kind}", response_class=HTMLResponse)
+async def worklists_view(request: Request, kind: str, _user=Depends(_require_auth)):
+    allowed = {
+        "expiring_14", "expiring_30", "stale_apps",
+        "market_followups", "remittances_due", "paused",
+    }
+    if kind not in allowed:
+        raise HTTPException(404, "Unknown worklist")
+    return templates.TemplateResponse(request, "worklists.html", {
+        "worklist": get_worklist(kind),
+    })
 
 
 # ─────────────────────────────────────────────────────────────────────────────
