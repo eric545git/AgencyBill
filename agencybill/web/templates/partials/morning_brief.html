@@ -1,0 +1,77 @@
+<div id="morning-brief" class="card bg-base-100 shadow mb-6 border border-base-200">
+  <div class="card-body p-5">
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+      <div>
+        <h2 class="card-title text-base">Today’s brief</h2>
+        <p class="text-xs text-base-content/50">Where to spend the next hour · updated {{ brief.generated_at }}</p>
+      </div>
+      <a href="/queue" class="btn btn-sm btn-primary">Open decision queue</a>
+    </div>
+
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+      <a href="/queue" class="rounded-lg bg-base-200/70 px-3 py-2 hover:bg-base-200 transition">
+        <div class="text-xs text-base-content/50">Decisions</div>
+        <div class="text-xl font-bold {% if brief.decisions_waiting %}text-error{% endif %}">{{ brief.decisions_waiting }}</div>
+      </a>
+      <a href="/worklists/expiring_14" class="rounded-lg bg-base-200/70 px-3 py-2 hover:bg-base-200 transition">
+        <div class="text-xs text-base-content/50">Expire ≤14d</div>
+        <div class="text-xl font-bold {% if brief.expiring_14 %}text-error{% endif %}">{{ brief.expiring_14 }}</div>
+      </a>
+      <a href="/worklists/expiring_30" class="rounded-lg bg-base-200/70 px-3 py-2 hover:bg-base-200 transition">
+        <div class="text-xs text-base-content/50">Expire ≤30d</div>
+        <div class="text-xl font-bold {% if brief.expiring_30 %}text-warning{% endif %}">{{ brief.expiring_30 }}</div>
+      </a>
+      <a href="/worklists/stale_apps" class="rounded-lg bg-base-200/70 px-3 py-2 hover:bg-base-200 transition">
+        <div class="text-xs text-base-content/50">Stale apps</div>
+        <div class="text-xl font-bold {% if brief.stale_applications %}text-warning{% endif %}">{{ brief.stale_applications }}</div>
+      </a>
+      <a href="/worklists/market_followups" class="rounded-lg bg-base-200/70 px-3 py-2 hover:bg-base-200 transition">
+        <div class="text-xs text-base-content/50">Market follow-ups</div>
+        <div class="text-xl font-bold {% if brief.quotes_waiting %}text-warning{% endif %}">{{ brief.quotes_waiting }}</div>
+      </a>
+      <a href="/alerts" class="rounded-lg bg-base-200/70 px-3 py-2 hover:bg-base-200 transition">
+        <div class="text-xs text-base-content/50">Critical alerts</div>
+        <div class="text-xl font-bold {% if brief.critical_alerts %}text-error{% endif %}">{{ brief.critical_alerts }}</div>
+      </a>
+    </div>
+
+    <div class="flex flex-wrap gap-3 mb-4 text-xs">
+      <a href="/worklists/remittances_due" class="link link-hover">
+        Remittances due: <span class="font-semibold">{{ brief.remittances_due }}</span>
+      </a>
+      <a href="/worklists/paused" class="link link-hover">
+        Paused workflows: <span class="font-semibold">{{ brief.paused }}</span>
+      </a>
+    </div>
+
+    {% if brief.top_decisions %}
+    <div>
+      <div class="text-xs font-semibold text-base-content/50 uppercase tracking-wide mb-2">Top decisions</div>
+      <ul class="divide-y divide-base-200 rounded-lg border border-base-200">
+        {% for cp in brief.top_decisions %}
+        <li class="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="badge badge-xs
+                {% if cp.urgency_band == 'critical' %}badge-error
+                {% elif cp.urgency_band == 'high' %}badge-warning
+                {% elif cp.urgency_band == 'medium' %}badge-info
+                {% else %}badge-ghost{% endif %}">{{ cp.urgency_band }}</span>
+              <span class="font-medium text-sm truncate">{{ cp.firm_name }}</span>
+              <span class="text-xs text-base-content/40">{{ cp.phase }}</span>
+            </div>
+            <p class="text-xs text-base-content/50 truncate max-w-xl">{{ cp.prompt }}</p>
+          </div>
+          <div class="flex gap-2 shrink-0">
+            <a href="/workflows/{{ cp.workflow_id }}" class="btn btn-xs btn-ghost">Context</a>
+            <a href="/queue#cp-{{ cp.id }}" class="btn btn-xs btn-warning">Decide</a>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% else %}
+    <p class="text-sm text-base-content/50">No pending decisions — clear to work expirations and market follow-ups.</p>
+    {% endif %}
+  </div>
+</div>

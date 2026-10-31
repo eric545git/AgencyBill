@@ -5,13 +5,14 @@ from pathlib import Path
 from contextlib import contextmanager
 
 from agencybill.config import DB_PATH
+from agencybill.db.migrations import apply_migrations
 
 _schema_path = Path(__file__).parent / "db" / "schema.sql"
 
 
 def get_connection() -> sqlite3.Connection:
     """Return a new SQLite connection with row_factory set."""
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = sqlite3.connect(str(DB_PATH), timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
@@ -33,10 +34,11 @@ def db():
 
 
 def init_db() -> None:
-    """Create all tables if they don't exist."""
+    """Create all tables if they don't exist, then apply migrations."""
     sql = _schema_path.read_text()
     with db() as conn:
         conn.executescript(sql)
+        apply_migrations(conn)
 
 
 def row_to_dict(row: sqlite3.Row) -> dict:

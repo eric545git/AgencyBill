@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}{{ worklist.title }} · AgencyBill{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+  <div class="text-sm breadcrumbs mb-1">
+    <ul>
+      <li><a href="/">Dashboard</a></li>
+      <li>Worklists</li>
+      <li>{{ worklist.title }}</li>
+    </ul>
+  </div>
+  <h1 class="text-2xl font-bold">{{ worklist.title }}</h1>
+  <p class="text-base-content/60 text-sm">{{ worklist.entries|length }} item(s)</p>
+</div>
+
+<div class="flex flex-wrap gap-2 mb-4">
+  {% for k, label in [
+    ('expiring_14', 'Expire ≤14d'),
+    ('expiring_30', 'Expire ≤30d'),
+    ('stale_apps', 'Stale apps'),
+    ('market_followups', 'Market follow-ups'),
+    ('remittances_due', 'Remittances due'),
+    ('paused', 'Paused'),
+  ] %}
+  <a href="/worklists/{{ k }}"
+     class="btn btn-sm {% if worklist.kind == k %}btn-primary{% else %}btn-ghost{% endif %}">
+    {{ label }}
+  </a>
+  {% endfor %}
+  <a href="/queue" class="btn btn-sm btn-ghost">Decisions →</a>
+</div>
+
+{% if worklist.entries %}
+<div class="card bg-base-100 shadow">
+  <div class="overflow-x-auto">
+    <table class="table">
+      <thead>
+        <tr class="text-xs text-base-content/50">
+          <th>Account</th>
+          <th>Detail</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for item in worklist.entries %}
+      <tr class="hover">
+        <td>
+          <div class="font-medium">{{ item.firm_name }}</div>
+          <div class="text-xs font-mono text-base-content/50">{{ item.policy_number or item.id }}</div>
+        </td>
+        <td class="text-sm text-base-content/70">{{ item.detail }}</td>
+        <td class="text-right">
+          <a href="{{ item.href }}" class="btn btn-xs btn-primary">
+            {% if item.resume_label %}{{ item.resume_label }}{% else %}Open{% endif %}
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card bg-base-100 shadow">
+  <div class="card-body text-center py-12 text-base-content/50">
+    Nothing in this worklist right now.
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

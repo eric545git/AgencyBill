@@ -1,7 +1,10 @@
 """Tools for reading and writing law firm data."""
 
 from agencybill.database import db, row_to_dict
+from agencybill.logging_config import get_logger
 import json
+
+log = get_logger("agencybill.firm_tools")
 
 
 def read_firm(firm_id: str) -> dict:
@@ -24,8 +27,8 @@ def read_attorneys(firm_id: str) -> list[dict]:
         if d.get("practice_areas"):
             try:
                 d["practice_areas"] = json.loads(d["practice_areas"])
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("Bad practice_areas JSON for attorney %s: %s", d.get("id"), exc)
         result.append(d)
     return result
 

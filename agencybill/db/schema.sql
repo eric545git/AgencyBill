@@ -42,7 +42,8 @@ CREATE TABLE IF NOT EXISTS brokers (
     state           TEXT,
     email           TEXT,
     phone           TEXT,
-    agency_name     TEXT
+    agency_name     TEXT,
+    commission_pct  REAL            -- override DEFAULT_COMMISSION_PCT when set
 );
 
 -- ─────────────────────────────────────────────
@@ -103,7 +104,30 @@ CREATE TABLE IF NOT EXISTS renewal_workflows (
     updated_at          TEXT DEFAULT (datetime('now')),
     completed_at        TEXT,
     assigned_underwriter TEXT,
-    notes               TEXT
+    notes               TEXT,
+    recommended_market_quote_id TEXT  -- set by QuoteCollectionAgent; accepted after HITL
+);
+
+CREATE TABLE IF NOT EXISTS worker_status (
+    workflow_id TEXT PRIMARY KEY,
+    status      TEXT NOT NULL,
+    error       TEXT,
+    started_at  TEXT,
+    updated_at  TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version     INTEGER PRIMARY KEY,
+    applied_at  TEXT DEFAULT (datetime('now')),
+    description TEXT
+);
+
+-- Operator settings. Secrets such as the OpenRouter API key live here so the
+-- web Admin page can override environment variables without rewriting .env.
+CREATE TABLE IF NOT EXISTS app_settings (
+    key         TEXT PRIMARY KEY,
+    value       TEXT NOT NULL,
+    updated_at  TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS workflow_events (
@@ -295,8 +319,29 @@ CREATE TABLE IF NOT EXISTS notifications (
     body        TEXT,
     channel     TEXT DEFAULT 'email',
     sent_at     TEXT DEFAULT (datetime('now')),
-    status      TEXT DEFAULT 'sent'
+    status      TEXT DEFAULT 'sent',
+    provider    TEXT,
+    provider_message_id TEXT,
+    error       TEXT
 );
+
+CREATE INDEX IF NOT EXISTS idx_notifications_workflow ON notifications(workflow_id);
+
+-- Mail received through SendGrid Inbound Parse.
+CREATE TABLE IF NOT EXISTS inbound_emails (
+    id              TEXT PRIMARY KEY,
+    workflow_id     TEXT,
+    from_address    TEXT,
+    to_address      TEXT,
+    subject         TEXT,
+    text_body       TEXT,
+    html_body       TEXT,
+    message_headers TEXT,
+    attachment_count INTEGER DEFAULT 0,
+    received_at     TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_inbound_workflow ON inbound_emails(workflow_id);
 
 -- ─────────────────────────────────────────────
 -- ALERTS & EXCEPTIONS
@@ -321,3 +366,14 @@ CREATE TABLE IF NOT EXISTS alerts (
     resolved_at     TEXT,
     resolved_by     TEXT
 );
+
+-- Indexes (also applied via migrations for existing DBs)
+CREATE INDEX IF NOT EXISTS idx_workflows_status_phase ON renewal_workflows(status, phase);
+CREATE INDEX IF NOT EXISTS idx_policies_exp_status ON policies(expiration_date, status);
+CREATE INDEX IF NOT EXISTS idx_checkpoints_decision ON human_checkpoints(decision);
+CREATE INDEX IF NOT EXISTS idx_checkpoints_workflow ON human_checkpoints(workflow_id);
+CREATE INDEX IF NOT EXISTS idx_alerts_status_sev ON alerts(status, severity);
+CREATE INDEX IF NOT EXISTS idx_audit_workflow ON audit_events(workflow_id);
+CREATE INDEX IF NOT EXISTS idx_submissions_workflow ON market_submissions(workflow_id);
+CREATE INDEX IF NOT EXISTS idx_market_quotes_workflow ON market_quotes(workflow_id);
+CREATE INDEX IF NOT EXISTS idx_quotes_workflow ON quotes(workflow_id);

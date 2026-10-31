@@ -3,8 +3,12 @@
 import uuid
 import json
 from datetime import datetime
+from typing import Any
 
 from agencybill.database import db, row_to_dict
+from agencybill.logging_config import get_logger
+
+log = get_logger("agencybill.audit")
 
 
 def log_audit_event(workflow_id: str | None, agent_name: str,
@@ -31,7 +35,8 @@ def get_audit_trail(workflow_id: str) -> list[dict]:
         if d.get("details_json"):
             try:
                 d["details"] = json.loads(d["details_json"])
-            except Exception:
+            except Exception as exc:
+                log.warning("Failed to parse audit details_json: %s", exc)
                 d["details"] = {}
         results.append(d)
     return results
@@ -44,12 +49,12 @@ def get_checkpoints(workflow_id: str) -> list[dict]:
             "SELECT * FROM human_checkpoints WHERE workflow_id = ? ORDER BY created_at",
             (workflow_id,),
         ).fetchall()
-    return [row_to_dict(r) for r in rows]
+    return [_enrich_checkpoint(row_to_dict(r)) for r in rows]
 
 
 def create_checkpoint(workflow_id: str, phase: str, prompt: str,
-                       options: list[str]) -> str:
-    """Create a human checkpoint record. Returns the checkpoint ID."""
+                       options: list[Any]) -> str:
+    """Create a human checkpoint record. Options should be [{key, label}, ...] or strings."""
     cp_id = str(uuid.uuid4())
     with db() as conn:
         conn.execute(
@@ -62,7 +67,7 @@ def create_checkpoint(workflow_id: str, phase: str, prompt: str,
 
 def resolve_checkpoint(checkpoint_id: str, decision: str,
                          decided_by: str = "human", notes: str = "") -> None:
-    """Record the human decision on a checkpoint."""
+    """Record the human decision on a checkpoint (stores the decision key)."""
     with db() as conn:
         conn.execute(
             """UPDATE human_checkpoints
@@ -70,3 +75,23 @@ def resolve_checkpoint(checkpoint_id: str, decision: str,
                WHERE id = ?""",
             (decision, decided_by, notes, checkpoint_id),
         )
+
+
+def _enrich_checkpoint(d: dict) -> dict:
+    if d.get("options_json"):
+        try:
+            raw = json.loads(d["options_json"])
+        except Exception as exc:
+            log.warning("Failed to parse checkpoint options_json: %s", exc)
+            raw = []
+        options = []
+        for opt in raw:
+            if isinstance(opt, dict):
+                options.append({
+                    "key": opt.get("key") or opt.get("value") or opt.get("label"),
+                    "label": opt.get("label") or opt.get("key") or "",
+                })
+            else:
+                options.append({"key": str(opt), "label": str(opt)})
+        d["options"] = options
+    return d

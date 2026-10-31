@@ -497,6 +497,10 @@ def _scan_agent_errors() -> None:
         try:
             details = json.loads(r.get("details_json") or "{}")
         except Exception:
+            from agencybill.logging_config import get_logger
+            get_logger("agencybill.alerts").warning(
+                "Bad details_json on audit event %s", r.get("id")
+            )
             details = {}
         _upsert_alert(
             "agent_error", "critical",

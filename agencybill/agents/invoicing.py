@@ -1,7 +1,7 @@
 """Phase 7 — Invoicing & Premium Collection Agent."""
 
 from agencybill.agents.base import BaseAgent
-from agencybill.tools.policy_tools import read_policy, update_workflow_phase, log_workflow_event
+from agencybill.tools.policy_tools import read_policy, log_workflow_event
 from agencybill.tools.firm_tools import read_firm, read_broker
 from agencybill.tools.payment_tools import (
     create_invoice, get_invoices_for_workflow, record_payment, get_invoice,
@@ -42,7 +42,8 @@ Your tasks:
 8. Simulate payment receipt: call record_payment for the full invoice amount
    (In a real system, you'd wait for actual payment)
 9. Log a workflow event confirming payment received
-10. Advance to REMITTANCE phase"""
+
+Do NOT advance the workflow phase yourself — the orchestrator advances to REMITTANCE after HITL."""
 
     def _register_tools(self) -> None:
         self._add_tool("read_policy", "Read policy details",
@@ -98,16 +99,11 @@ Your tasks:
                 "data": {"type": "object"},
             }, "required": ["workflow_id", "phase", "event_type", "actor", "data"]},
             log_workflow_event)
-        self._add_tool("advance_to_remittance",
-            "Advance workflow to REMITTANCE phase",
-            {"type": "object", "properties": {"workflow_id": {"type": "string"}}, "required": ["workflow_id"]},
-            lambda workflow_id: update_workflow_phase(workflow_id, "REMITTANCE"))
-
     def run_phase(self, policy_id: str, workflow_id: str) -> str:
         msg = (
             f"Begin Phase 7 Invoicing & Premium Collection for policy_id={policy_id}, "
             f"workflow_id={workflow_id}. "
             "Create the invoice, generate invoice document, notify broker and insured, "
-            "simulate payment receipt, and advance to REMITTANCE."
+            "and simulate payment receipt."
         )
         return self.run(msg)

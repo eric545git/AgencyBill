@@ -7,22 +7,10 @@ from rich.panel import Panel
 from rich.text import Text
 from rich import box
 
+from agencybill.config import PHASE_COLORS, PHASE_LABELS
+
 console = Console()
 
-
-PHASE_COLORS = {
-    "PRE_RENEWAL":  "cyan",
-    "APPLICATION":  "blue",
-    "UNDERWRITING": "yellow",
-    "QUOTING":      "magenta",
-    "NEGOTIATION":  "bright_yellow",
-    "BINDING":      "green",
-    "INVOICING":    "bright_cyan",
-    "REMITTANCE":   "bright_green",
-    "COMPLETE":     "bold green",
-    "NON_RENEWAL":  "red",
-    "DECLINED":     "bold red",
-}
 
 STATUS_COLORS = {
     "active":      "green",
@@ -40,19 +28,7 @@ def print_header(title: str) -> None:
 
 
 def print_phase_banner(phase: str, workflow_id: str) -> None:
-    label = {
-        "PRE_RENEWAL":  "Phase 1 — Pre-Renewal Triage",
-        "APPLICATION":  "Phase 2 — Renewal Application",
-        "UNDERWRITING": "Phase 3 — Underwriting Review",
-        "QUOTING":      "Phase 4 — Quote Generation",
-        "NEGOTIATION":  "Phase 5 — Quote Negotiation",
-        "BINDING":      "Phase 6 — Binding & Issuance",
-        "INVOICING":    "Phase 7 — Invoicing & Payment",
-        "REMITTANCE":   "Phase 8 — Premium Remittance",
-        "COMPLETE":     "Workflow Complete",
-        "NON_RENEWAL":  "Non-Renewal",
-        "DECLINED":     "Declined",
-    }.get(phase, phase)
+    label = PHASE_LABELS.get(phase, phase)
     color = PHASE_COLORS.get(phase, "white")
     console.print()
     console.print(Panel(

@@ -1,13 +1,9 @@
 """Phase 1 — Pre-Renewal Triage Agent."""
 
 from agencybill.agents.base import BaseAgent
-from agencybill.tools.policy_tools import (
-    read_policy, get_or_create_workflow, list_expiring_policies,
-    update_workflow_phase, log_workflow_event,
-)
+from agencybill.tools.policy_tools import read_policy, log_workflow_event
 from agencybill.tools.firm_tools import read_firm, read_attorneys, get_firm_practice_areas
 from agencybill.tools.claims_tools import get_claims_for_firm, generate_loss_run
-from agencybill.tools.audit_tools import log_audit_event
 
 
 class PreRenewalAgent(BaseAgent):
@@ -27,7 +23,8 @@ Your tasks:
 4. Read the firm's claims history using get_claims_for_firm (last 5 years)
 5. Generate a preliminary loss run summary using generate_loss_run
 6. Log a workflow event summarizing your findings
-7. Advance the workflow to the APPLICATION phase
+
+Do NOT advance the workflow phase yourself — the orchestrator advances to APPLICATION.
 
 Be thorough. Identify any red flags (high claims, unusual practice areas, large firm growth).
 When done, provide a clear summary of the account for the underwriting team."""
@@ -99,18 +96,11 @@ When done, provide a clear summary of the account for the underwriting team."""
             },
             log_workflow_event,
         )
-        self._add_tool(
-            "advance_to_application",
-            "Advance the workflow to the APPLICATION phase",
-            {"type": "object", "properties": {"workflow_id": {"type": "string"}}, "required": ["workflow_id"]},
-            lambda workflow_id: update_workflow_phase(workflow_id, "APPLICATION"),
-        )
-
     def run_phase(self, policy_id: str, workflow_id: str) -> str:
         msg = (
             f"Begin Phase 1 Pre-Renewal Triage for policy_id={policy_id}, "
             f"workflow_id={workflow_id}. "
             "Pull all policy, firm, attorney, and claims data. "
-            "Summarize the account and advance to APPLICATION when done."
+            "Summarize the account when done."
         )
         return self.run(msg)

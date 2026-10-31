@@ -5,10 +5,11 @@ import json
 from datetime import datetime
 
 from agencybill.agents.base import BaseAgent
-from agencybill.tools.policy_tools import read_policy, update_workflow_phase, log_workflow_event
+from agencybill.tools.policy_tools import read_policy, log_workflow_event
 from agencybill.tools.firm_tools import read_firm, read_attorneys
 from agencybill.tools.document_tools import save_document
 from agencybill.tools.notification_tools import send_notification
+from agencybill.tools.application_tools import get_application
 from agencybill.database import db
 
 
@@ -40,16 +41,6 @@ def _receive_application(application_id: str, additional_notes: str = "") -> dic
     return {"id": application_id, "status": "received", "completed": True}
 
 
-def _get_application(workflow_id: str) -> dict:
-    from agencybill.database import row_to_dict
-    with db() as conn:
-        row = conn.execute(
-            "SELECT * FROM applications WHERE workflow_id = ? ORDER BY created_at DESC LIMIT 1",
-            (workflow_id,),
-        ).fetchone()
-    return row_to_dict(row)
-
-
 class ApplicationAgent(BaseAgent):
     """Phase 2: Create renewal application, notify insured, track receipt."""
 
@@ -65,7 +56,8 @@ Your tasks:
 6. Generate the renewal questionnaire document (save_document with 'renewal_questionnaire.html')
 7. Mark the application as received (in a real workflow, you'd wait — here simulate receipt)
 8. Log a workflow event
-9. Advance to UNDERWRITING phase
+
+Do NOT advance the workflow phase yourself — the orchestrator advances to UNDERWRITING.
 
 Use professional, clear language in all notifications."""
 
@@ -98,7 +90,7 @@ Use professional, clear language in all notifications."""
             _receive_application)
         self._add_tool("get_application", "Get the current application for a workflow",
             {"type": "object", "properties": {"workflow_id": {"type": "string"}}, "required": ["workflow_id"]},
-            _get_application)
+            get_application)
         self._add_tool("send_notification",
             "Send an email notification to insured or broker",
             {"type": "object", "properties": {
@@ -124,15 +116,10 @@ Use professional, clear language in all notifications."""
                 "data": {"type": "object"},
             }, "required": ["workflow_id", "phase", "event_type", "actor", "data"]},
             log_workflow_event)
-        self._add_tool("advance_to_underwriting",
-            "Advance the workflow to UNDERWRITING phase",
-            {"type": "object", "properties": {"workflow_id": {"type": "string"}}, "required": ["workflow_id"]},
-            lambda workflow_id: update_workflow_phase(workflow_id, "UNDERWRITING"))
-
     def run_phase(self, policy_id: str, workflow_id: str) -> str:
         msg = (
             f"Begin Phase 2 Renewal Application for policy_id={policy_id}, "
             f"workflow_id={workflow_id}. "
-            "Create the application, send notifications, generate documents, and advance to UNDERWRITING."
+            "Create the application, send notifications, and generate documents."
         )
         return self.run(msg)
