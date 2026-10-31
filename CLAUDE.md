@@ -35,7 +35,7 @@ The `WorkflowOrchestrator` accepts `web_mode=bool`. In web mode:
 
 ### Phase Sequencing
 
-`orchestrator.py` owns `AGENT_MAP` (phase name → agent class), `CHECKPOINTS_BEFORE` (phases requiring approval before the agent runs), and `CHECKPOINTS_AFTER` (phases requiring human review of agent output). When adding a new phase, update all three structures plus `config.py PHASES`.
+`config.py` is the single source of truth for `PHASES`, `PHASE_LABELS`, `PHASE_COLORS`, and `NEXT_PHASE`. `orchestrator.py` owns `AGENT_MAP`, `CHECKPOINTS_BEFORE`, and `CHECKPOINTS_AFTER` (options use stable `{key, label}` pairs). **The orchestrator advances phases** after a successful agent run + any HITL checkpoint — agents must not call `advance_to_*` tools. Quote acceptance is deferred until the QUOTE_COLLECTION post-checkpoint confirms the recommendation. When adding a new phase, update `PHASES` / `NEXT_PHASE` in `config.py` plus the three orchestrator structures.
 
 ### Market Submission Flow (Phases 4–5)
 
@@ -71,71 +71,32 @@ agencybill/
   checkpoint.py           HumanCheckpoint — CLI blocking or web DB polling
 
   agents/
-    base.py               BaseAgent: _add_tool(), run(), _run_loop()
-    pre_renewal.py        Phase 1
-    application.py        Phase 2
-    underwriting.py       Phase 3
-    market_submission.py  Phase 4
-    quote_collection.py   Phase 5
-    binding.py            Phase 6
-    invoicing.py          Phase 7
-    remittance.py         Phase 8
+    base.py               BaseAgent: tool-use loop with retries + API key guard
+    pre_renewal.py … remittance.py   Phases 1–8 (orchestrator advances phases)
 
   tools/
-    policy_tools.py       list_expiring_policies, read_policy, read_workflow,
-                          get_or_create_workflow, update_workflow_phase,
-                          update_workflow_status, list_workflows, log_workflow_event
-    firm_tools.py         read_firm, read_attorneys, get_firm_practice_areas, read_broker
-    claims_tools.py       get_claims_for_policy, generate_loss_run,
-                          compute_experience_modifier, assess_risk
-    market_tools.py       list_markets, select_markets_for_account,
-                          create_submission, get_submissions, update_submission_status,
-                          record_market_quote, get_market_quotes, accept_market_quote
-    document_tools.py     render_template, save_document (Jinja2 → output/)
-    notification_tools.py send_notification, get_notifications
-    payment_tools.py      create_invoice, record_payment, create_remittance,
-                          mark_remittance_sent, get_invoices_for_workflow, get_remittances
-    audit_tools.py        log_audit_event, get_audit_trail,
-                          create_checkpoint, resolve_checkpoint, get_checkpoints
-    alerts_tools.py       run_alert_scan, get_alerts, count_open_alerts,
-                          acknowledge_alert, resolve_alert, get_alerts_for_workflow
+    application_tools.py  get_application (shared)
+    market_tools.py       … recommend_market_quote, accept_market_quote, mark_submission_bound
+    payment_tools.py      … resolve_commission_pct, create_remittance
+    (+ policy/firm/claims/document/notification/audit/alerts tools)
 
   db/
-    schema.sql            18 tables — law_firms, attorneys, brokers, policies,
-                          claims, renewal_workflows, workflow_events, applications,
-                          quotes, markets, market_submissions, market_quotes,
-                          invoices, payments, remittances, human_checkpoints,
-                          audit_events, notifications, alerts
+    schema.sql            tables + indexes
+    migrations.py         versioned SQLite migrations
 
   web/
-    app.py                FastAPI app — routes, Jinja2 templates, HTMX partials
-    worker.py             _registry (workflow threads), ensure_alert_scanner()
-    templates/
-      base.html           Nav (Dashboard, Workflows, Policies, Queue, Alerts)
-      dashboard.html
-      workflows.html
-      workflow_detail.html  Market submissions panel, quote comparison, alerts
-      policies.html
-      queue.html
-      alerts.html
-      partials/
-        workflow_status.html
-        audit_rows.html
-        workflow_alerts.html
-        dashboard_stats.html
+    app.py                FastAPI — lifespan, optional basic auth, HTMX
+    worker.py             thread registry + persisted worker_status
+    static/               mounted static assets
+    templates/            …
+      partials/workflow_status.html  uses config PHASES
 
   templates/              Jinja2 HTML document output templates
-    renewal_questionnaire.html
-    underwriting_memo.html
-    quote_presentation.html
-    binder.html
-    policy_declarations.html
-    invoice.html
-    non_renewal_notice.html
+
+tests/                    pytest suite (tools, orchestrator, auth, migrations)
 
 data/
-  fixtures/               Seed JSON: seed_firms, seed_attorneys, seed_brokers,
-                          seed_policies, seed_claims, seed_markets
+  fixtures/               Seed JSON
   agencybill.db           SQLite DB (gitignored, auto-created)
 
 output/                   Generated HTML documents (gitignored)
@@ -143,13 +104,12 @@ output/                   Generated HTML documents (gitignored)
 
 ## Adding a New Agent Phase
 
-1. Create `agencybill/agents/my_phase.py` extending `BaseAgent`
-2. Add the phase name to `PHASES` in `config.py` and `PHASE_LABELS`
+1. Create `agencybill/agents/my_phase.py` extending `BaseAgent` (do not advance phase yourself)
+2. Add the phase to `PHASES`, `PHASE_LABELS`, `PHASE_COLORS`, and `NEXT_PHASE` in `config.py`
 3. Add the agent class to `AGENT_MAP` in `orchestrator.py`
-4. Add any HITL checkpoints to `CHECKPOINTS_BEFORE` or `CHECKPOINTS_AFTER`
+4. Add any HITL checkpoints to `CHECKPOINTS_BEFORE` or `CHECKPOINTS_AFTER` using `{key, label}` options
 5. If a HITL checkpoint needs special decision logic, add an `elif phase == "MY_PHASE"` block in the `orchestrator.run()` loop
-6. Update the phase percentage lookup in `app.py _phase_pct()`
-7. Update `base.html` CSS for the new phase pill class
+6. Update `base.html` CSS for the new phase pill class
 
 ## Adding a New Alert Type
 
@@ -170,6 +130,9 @@ The `dedup_key` format is `"alert_type:entity_id"`. Never include timestamps in 
 | `AGENCYBILL_DB_PATH` | `data/agencybill.db` | Relative to project root |
 | `AGENCYBILL_OUTPUT_DIR` | `output` | Relative to project root |
 | `AGENCYBILL_MAX_AGENT_TURNS` | `20` | Increase if complex accounts run out of turns |
+| `AGENCYBILL_COMMISSION_PCT` | `0.15` | Default broker commission if broker has no override |
+| `AGENCYBILL_WEB_USER` | `agencybill` | HTTP Basic Auth username for the web UI |
+| `AGENCYBILL_WEB_PASSWORD` | _(empty)_ | Set to enable web auth; leave empty only for local demo |
 
 ## Common Issues
 

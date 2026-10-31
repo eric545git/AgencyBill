@@ -1,17 +1,27 @@
 """Phase 6 — Binding & Policy Issuance Agent."""
 
-import uuid
+import calendar
 from datetime import datetime, date
 
 from agencybill.agents.base import BaseAgent
-from agencybill.tools.policy_tools import (
-    read_policy, update_workflow_phase, update_policy_status, log_workflow_event,
-)
+from agencybill.tools.policy_tools import read_policy, log_workflow_event
 from agencybill.tools.firm_tools import read_firm, read_attorneys, read_broker
 from agencybill.tools.document_tools import save_document
 from agencybill.tools.notification_tools import send_notification
 from agencybill.tools.audit_tools import log_audit_event
+from agencybill.tools.market_tools import mark_submission_bound, get_recommended_market_quote_id
 from agencybill.database import db, row_to_dict
+
+
+def _add_one_year(iso_date: str) -> str:
+    """Add one calendar year, clamping Feb 29 → Feb 28 on non-leap years."""
+    d = date.fromisoformat(iso_date[:10])
+    try:
+        return date(d.year + 1, d.month, d.day).isoformat()
+    except ValueError:
+        # Feb 29 → last day of Feb next year
+        last = calendar.monthrange(d.year + 1, d.month)[1]
+        return date(d.year + 1, d.month, last).isoformat()
 
 
 def _get_accepted_quote(workflow_id: str) -> dict:
@@ -24,37 +34,77 @@ def _get_accepted_quote(workflow_id: str) -> dict:
 
 
 def _bind_policy(workflow_id: str, policy_id: str, quote_id: str) -> dict:
-    """Create a binder record by updating the policy and logging the bind event."""
+    """
+    Bind coverage: update the policy with renewal terms from the accepted quote
+    and mark the related market submission as bound.
+    """
     binder_number = f"BND-{datetime.now().strftime('%Y%m%d')}-{workflow_id[:6].upper()}"
 
-    # Compute new policy dates (1 year from expiration)
     with db() as conn:
-        pol = conn.execute("SELECT expiration_date, carrier FROM policies WHERE id = ?",
-                           (policy_id,)).fetchone()
-    if pol:
+        pol = conn.execute(
+            "SELECT * FROM policies WHERE id = ?", (policy_id,)
+        ).fetchone()
+        quote = conn.execute(
+            "SELECT * FROM quotes WHERE id = ?", (quote_id,)
+        ).fetchone()
+
+        if not pol:
+            return {"error": f"Policy not found: {policy_id}"}
+
         old_exp = pol["expiration_date"]
         effective_date = old_exp
-        # Add 1 year
-        try:
-            from datetime import date as ddate
-            ed = ddate.fromisoformat(old_exp)
-            new_exp = ddate(ed.year + 1, ed.month, ed.day).isoformat()
-        except Exception:
-            new_exp = old_exp[:4+1] + str(int(old_exp[:4]) + 1) + old_exp[4:]
+        new_exp = _add_one_year(old_exp)
+
+        # Prefer quote terms when available
         carrier = pol["carrier"]
-    else:
-        effective_date = date.today().isoformat()
-        new_exp = date(date.today().year + 1, date.today().month, date.today().day).isoformat()
-        carrier = "Unknown"
+        limit_per_claim = pol["limit_per_claim"]
+        aggregate_limit = pol["aggregate_limit"]
+        deductible = pol["deductible"]
+        annual_premium = pol["annual_premium"]
+
+        if quote:
+            limit_per_claim = quote["per_claim_limit"] or limit_per_claim
+            aggregate_limit = quote["aggregate_limit"] or aggregate_limit
+            deductible = quote["deductible"] or deductible
+            annual_premium = quote["annual_premium"] or annual_premium
+            # Carrier may be embedded in quote notes as "Carrier: X | ..."
+            notes = quote["notes"] or ""
+            if notes.startswith("Carrier:"):
+                carrier = notes.split("|")[0].replace("Carrier:", "").strip() or carrier
+
+        conn.execute(
+            """UPDATE policies SET
+                   effective_date = ?,
+                   expiration_date = ?,
+                   limit_per_claim = ?,
+                   aggregate_limit = ?,
+                   deductible = ?,
+                   annual_premium = ?,
+                   carrier = ?,
+                   status = 'active'
+               WHERE id = ?""",
+            (effective_date, new_exp, limit_per_claim, aggregate_limit,
+             deductible, annual_premium, carrier, policy_id),
+        )
+
+    # Mark market submission bound if we have a recommended/accepted market quote
+    market_quote_id = get_recommended_market_quote_id(workflow_id)
+    if market_quote_id:
+        mark_submission_bound(market_quote_id)
 
     log_audit_event(workflow_id, "BindingAgent", "policy_bound",
                     {"binder_number": binder_number, "effective_date": effective_date,
-                     "expiration_date": new_exp, "quote_id": quote_id})
+                     "expiration_date": new_exp, "quote_id": quote_id,
+                     "carrier": carrier, "annual_premium": annual_premium})
     return {
         "binder_number": binder_number,
         "effective_date": effective_date,
         "expiration_date": new_exp,
         "carrier": carrier,
+        "annual_premium": annual_premium,
+        "limit_per_claim": limit_per_claim,
+        "aggregate_limit": aggregate_limit,
+        "deductible": deductible,
         "status": "bound",
     }
 
@@ -70,7 +120,7 @@ Your tasks:
 2. Get the accepted quote (get_accepted_quote)
 3. Read the attorney roster (read_attorneys)
 4. Read broker info if broker_id is available (read_broker)
-5. Bind the policy (bind_policy) — this returns binder_number, effective_date, expiration_date
+5. Bind the policy (bind_policy) — this updates policy dates/terms and returns binder_number
 6. Generate the binder document (save_document with 'binder.html')
    Context needs: firm, policy, quote, broker, binder_number, effective_date, expiration_date
 7. Generate the policy declarations page (save_document with 'policy_declarations.html')
@@ -79,7 +129,8 @@ Your tasks:
 8. Send notification to insured confirming binding with effective date
 9. Send notification to broker confirming binding
 10. Log a workflow event
-11. Advance to INVOICING phase"""
+
+Do NOT advance the workflow phase yourself — the orchestrator advances to INVOICING."""
 
     def _register_tools(self) -> None:
         self._add_tool("read_policy", "Read policy details",
@@ -97,7 +148,7 @@ Your tasks:
         self._add_tool("get_accepted_quote", "Get the accepted quote for this workflow",
             {"type": "object", "properties": {"workflow_id": {"type": "string"}}, "required": ["workflow_id"]},
             _get_accepted_quote)
-        self._add_tool("bind_policy", "Bind the policy — creates binder record",
+        self._add_tool("bind_policy", "Bind the policy — updates policy terms and marks submission bound",
             {"type": "object", "properties": {
                 "workflow_id": {"type": "string"},
                 "policy_id": {"type": "string"},
@@ -127,16 +178,12 @@ Your tasks:
                 "data": {"type": "object"},
             }, "required": ["workflow_id", "phase", "event_type", "actor", "data"]},
             log_workflow_event)
-        self._add_tool("advance_to_invoicing",
-            "Advance workflow to INVOICING phase",
-            {"type": "object", "properties": {"workflow_id": {"type": "string"}}, "required": ["workflow_id"]},
-            lambda workflow_id: update_workflow_phase(workflow_id, "INVOICING"))
 
     def run_phase(self, policy_id: str, workflow_id: str) -> str:
         msg = (
             f"Begin Phase 6 Binding & Policy Issuance for policy_id={policy_id}, "
             f"workflow_id={workflow_id}. "
             "Get the accepted quote, bind the policy, issue binder and declarations, "
-            "notify parties, and advance to INVOICING."
+            "and notify parties."
         )
         return self.run(msg)

@@ -1,17 +1,16 @@
 """Phase 5 — Quote Collection Agent.
 
 Tracks market responses, presents received quotes for comparison,
-and works with the human to select the winning quote for binding.
+and recommends a winning quote. Acceptance happens after HITL confirmation.
 """
 
 from agencybill.agents.base import BaseAgent
-from agencybill.tools.policy_tools import read_policy, update_workflow_phase, log_workflow_event
+from agencybill.tools.policy_tools import read_policy, log_workflow_event
 from agencybill.tools.firm_tools import read_firm
 from agencybill.tools.notification_tools import send_notification
-from agencybill.tools.audit_tools import log_audit_event
 from agencybill.tools.market_tools import (
     get_submissions, get_submission_summary, get_market_quotes,
-    accept_market_quote, update_submission_status,
+    recommend_market_quote, update_submission_status,
 )
 
 
@@ -19,13 +18,8 @@ class QuoteCollectionAgent(BaseAgent):
     """
     Phase 5 — Quote Collection.
 
-    Reviews the market submissions and received quotes. Presents a comparison
-    of all received quotes. Once the human selects a winner via the HITL queue,
-    marks it accepted and advances to BINDING.
-
-    Note: In web mode, quote entry happens directly through the web UI — humans
-    record quotes as they arrive from markets. This agent runs after the user
-    signals they are ready to compare and select.
+    Reviews market submissions and received quotes, then recommends a winner.
+    The orchestrator accepts the quote only after the human checkpoint confirms.
     """
 
     name = "QuoteCollectionAgent"
@@ -42,17 +36,18 @@ Markets have received the submission and some have responded with quotes. Your j
    - Note any important coverage differences (exclusions, retroactive dates)
    - Flag any concerns about coverage gaps
 5. If there are quotes to compare: identify the recommended quote and explain why
-6. Accept the recommended/best quote (accept_market_quote)
-   - In a real workflow the broker confirms — here accept the best premium with broadest coverage
-   - "Best" means: lowest premium for equivalent coverage terms, OR best coverage at similar premium
-7. Send a notification to the firm and broker confirming the selected quote
+6. Call recommend_market_quote with the winning market_quote_id and a short rationale
+   - Do NOT call accept — the human must confirm first
+7. Send a notification to the firm and broker summarizing the recommendation
 8. Log a workflow event with the selection rationale
-9. Advance to BINDING phase
 
 If NO quotes have been received yet:
 - Log the pending status
 - Send follow-up reminders to markets that haven't responded
-- Do NOT advance — the orchestrator will handle the HITL wait
+- Do NOT recommend a quote
+- Do NOT advance — the workflow will pause for human follow-up
+
+Do NOT advance the workflow phase yourself — the orchestrator advances after HITL.
 
 Quote comparison criteria for LPL:
 - Annual premium (primary)
@@ -79,13 +74,14 @@ Quote comparison criteria for LPL:
         self._add_tool("get_market_quotes", "Get all market quotes received for this workflow",
             {"type": "object", "properties": {"workflow_id": {"type": "string"}}, "required": ["workflow_id"]},
             get_market_quotes)
-        self._add_tool("accept_market_quote",
-            "Accept a market quote as the winning bid (also creates a quotes record for binding)",
+        self._add_tool("recommend_market_quote",
+            "Recommend a market quote as the preferred option (does NOT accept — HITL confirms later)",
             {"type": "object", "properties": {
                 "market_quote_id": {"type": "string"},
                 "workflow_id": {"type": "string"},
+                "rationale": {"type": "string"},
             }, "required": ["market_quote_id", "workflow_id"]},
-            accept_market_quote)
+            recommend_market_quote)
         self._add_tool("update_submission_status",
             "Update the status of a market submission (e.g., mark as declined or no_response)",
             {"type": "object", "properties": {
@@ -111,16 +107,12 @@ Quote comparison criteria for LPL:
                 "data": {"type": "object"},
             }, "required": ["workflow_id", "phase", "event_type", "actor", "data"]},
             log_workflow_event)
-        self._add_tool("advance_to_binding",
-            "Advance workflow to BINDING phase after quote is accepted",
-            {"type": "object", "properties": {"workflow_id": {"type": "string"}}, "required": ["workflow_id"]},
-            lambda workflow_id: update_workflow_phase(workflow_id, "BINDING"))
 
     def run_phase(self, policy_id: str, workflow_id: str) -> str:
         msg = (
             f"Begin Phase 5 Quote Collection for policy_id={policy_id}, "
             f"workflow_id={workflow_id}. "
-            "Review all received market quotes, compare them, accept the best one, "
-            "notify the broker, and advance to BINDING."
+            "Review all received market quotes, compare them, recommend the best one, "
+            "and notify the broker. Do not accept the quote yourself."
         )
         return self.run(msg)

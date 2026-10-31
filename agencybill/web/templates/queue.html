@@ -39,8 +39,8 @@
       <div class="flex flex-wrap gap-2 mb-3">
         {% for opt in cp.options %}
         <label class="cursor-pointer">
-          <input type="radio" name="decision" value="{{ opt }}" class="sr-only peer" required />
-          <span class="btn btn-sm peer-checked:btn-primary btn-outline">{{ opt }}</span>
+          <input type="radio" name="decision" value="{{ opt.key if opt is mapping else opt }}" class="sr-only peer" required />
+          <span class="btn btn-sm peer-checked:btn-primary btn-outline">{{ opt.label if opt is mapping else opt }}</span>
         </label>
         {% endfor %}
       </div>

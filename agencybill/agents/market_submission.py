@@ -5,25 +5,15 @@ records, and sends the account package to each market for quoting.
 """
 
 from agencybill.agents.base import BaseAgent
-from agencybill.tools.policy_tools import read_policy, update_workflow_phase, log_workflow_event
+from agencybill.tools.policy_tools import read_policy, log_workflow_event
 from agencybill.tools.firm_tools import read_firm, read_attorneys, get_firm_practice_areas
 from agencybill.tools.claims_tools import generate_loss_run
 from agencybill.tools.notification_tools import send_notification
-from agencybill.tools.audit_tools import log_audit_event
 from agencybill.tools.market_tools import (
     list_markets, select_markets_for_account, create_submission,
     get_submissions, get_submission_summary,
 )
-from agencybill.database import db, row_to_dict
-
-
-def _get_application(workflow_id: str) -> dict:
-    with db() as conn:
-        row = conn.execute(
-            "SELECT * FROM applications WHERE workflow_id = ? ORDER BY created_at DESC LIMIT 1",
-            (workflow_id,),
-        ).fetchone()
-    return row_to_dict(row)
+from agencybill.tools.application_tools import get_application
 
 
 class MarketSubmissionAgent(BaseAgent):
@@ -65,7 +55,8 @@ Your tasks:
      * 5-year loss summary
      * Requesting quote by [date 10 business days out]
 9. Log a workflow event with the submission summary (get_submission_summary)
-10. Advance to QUOTE_COLLECTION phase
+
+Do NOT advance the workflow phase yourself — the orchestrator advances to QUOTE_COLLECTION.
 
 Select markets that are a good fit for the risk profile. For high-risk accounts (securities, large claims history), include E&S markets. For clean accounts, prioritize preferred/standard markets.
 
@@ -92,7 +83,7 @@ Be professional and thorough in your submission emails."""
             generate_loss_run)
         self._add_tool("get_application", "Get the renewal application",
             {"type": "object", "properties": {"workflow_id": {"type": "string"}}, "required": ["workflow_id"]},
-            _get_application)
+            get_application)
         self._add_tool("list_markets", "List all available wholesale markets and program admins",
             {"type": "object", "properties": {
                 "active_only": {"type": "boolean", "default": True},
@@ -139,16 +130,11 @@ Be professional and thorough in your submission emails."""
                 "data": {"type": "object"},
             }, "required": ["workflow_id", "phase", "event_type", "actor", "data"]},
             log_workflow_event)
-        self._add_tool("advance_to_quote_collection",
-            "Advance workflow to QUOTE_COLLECTION phase",
-            {"type": "object", "properties": {"workflow_id": {"type": "string"}}, "required": ["workflow_id"]},
-            lambda workflow_id: update_workflow_phase(workflow_id, "QUOTE_COLLECTION"))
-
     def run_phase(self, policy_id: str, workflow_id: str) -> str:
         msg = (
             f"Begin Phase 4 Market Submission for policy_id={policy_id}, "
             f"workflow_id={workflow_id}. "
             "Review the account, select appropriate markets, create submissions, "
-            "send submission emails, and advance to QUOTE_COLLECTION."
+            "and send submission emails."
         )
         return self.run(msg)

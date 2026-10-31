@@ -3,6 +3,7 @@
 import uuid
 from datetime import datetime, date, timedelta
 
+from agencybill.config import DEFAULT_COMMISSION_PCT
 from agencybill.database import db, row_to_dict
 
 
@@ -55,7 +56,6 @@ def record_payment(invoice_id: str, amount: float,
                VALUES (?, ?, ?, ?, ?)""",
             (pay_id, invoice_id, amount, method, reference),
         )
-        # Check if fully paid
         inv = conn.execute(
             "SELECT amount_due FROM invoices WHERE id = ?", (invoice_id,)
         ).fetchone()
@@ -76,9 +76,27 @@ def record_payment(invoice_id: str, amount: float,
             "method": method, "reference": reference}
 
 
+def resolve_commission_pct(broker_id: str | None = None) -> dict:
+    """Return commission percent from broker override or DEFAULT_COMMISSION_PCT."""
+    pct = DEFAULT_COMMISSION_PCT
+    source = "default"
+    if broker_id:
+        with db() as conn:
+            row = conn.execute(
+                "SELECT commission_pct FROM brokers WHERE id = ?", (broker_id,)
+            ).fetchone()
+        if row and row["commission_pct"] is not None:
+            pct = float(row["commission_pct"])
+            source = "broker"
+    return {"commission_pct": pct, "source": source, "broker_id": broker_id}
+
+
 def create_remittance(workflow_id: str, carrier: str, gross_premium: float,
-                       commission_pct: float = 0.15) -> dict:
+                       commission_pct: float | None = None,
+                       broker_id: str | None = None) -> dict:
     """Create a remittance record (net of commission)."""
+    if commission_pct is None:
+        commission_pct = resolve_commission_pct(broker_id)["commission_pct"]
     rem_id = str(uuid.uuid4())
     net_commission = round(gross_premium * commission_pct, 2)
     carrier_amount = round(gross_premium - net_commission, 2)
@@ -96,6 +114,7 @@ def create_remittance(workflow_id: str, carrier: str, gross_premium: float,
         "workflow_id": workflow_id,
         "carrier": carrier,
         "gross_premium": gross_premium,
+        "commission_pct": commission_pct,
         "net_commission": net_commission,
         "carrier_amount": carrier_amount,
         "due_date": due_date,

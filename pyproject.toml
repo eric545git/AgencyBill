@@ -18,9 +18,16 @@ dependencies = [
     "python-multipart>=0.0.9",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
 [project.scripts]
 agencybill = "agencybill.cli:cli"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["agencybill*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

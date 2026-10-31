@@ -14,6 +14,10 @@ OUTPUT_DIR: Path = BASE_DIR / os.getenv("AGENCYBILL_OUTPUT_DIR", "output")
 MODEL: str = os.getenv("AGENCYBILL_MODEL", "claude-sonnet-4-6")
 MAX_AGENT_TURNS: int = int(os.getenv("AGENCYBILL_MAX_AGENT_TURNS", "20"))
 
+# Web basic auth — set AGENCYBILL_WEB_PASSWORD to enable; empty disables with a warning
+WEB_USER: str = os.getenv("AGENCYBILL_WEB_USER", "agencybill")
+WEB_PASSWORD: str = os.getenv("AGENCYBILL_WEB_PASSWORD", "")
+
 FIXTURES_DIR: Path = BASE_DIR / "data" / "fixtures"
 TEMPLATES_DIR: Path = BASE_DIR / "agencybill" / "templates"
 
@@ -21,7 +25,10 @@ TEMPLATES_DIR: Path = BASE_DIR / "agencybill" / "templates"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-# Workflow phases in order
+# Default agency-bill commission retained by the broker
+DEFAULT_COMMISSION_PCT: float = float(os.getenv("AGENCYBILL_COMMISSION_PCT", "0.15"))
+
+# Workflow phases in order (single source of truth)
 PHASES = [
     "PRE_RENEWAL",
     "APPLICATION",
@@ -33,6 +40,9 @@ PHASES = [
     "REMITTANCE",
     "COMPLETE",
 ]
+
+# Phases that have an agent (excludes terminal COMPLETE)
+AGENT_PHASES = [p for p in PHASES if p != "COMPLETE"]
 
 PHASE_LABELS = {
     "PRE_RENEWAL":        "Phase 1 — Pre-Renewal Triage",
@@ -47,6 +57,40 @@ PHASE_LABELS = {
     "NON_RENEWAL":        "Non-Renewal",
     "DECLINED":           "Declined",
 }
+
+PHASE_COLORS = {
+    "PRE_RENEWAL":       "cyan",
+    "APPLICATION":       "blue",
+    "UNDERWRITING":      "yellow",
+    "MARKET_SUBMISSION": "magenta",
+    "QUOTE_COLLECTION":  "bright_yellow",
+    "BINDING":           "green",
+    "INVOICING":         "bright_cyan",
+    "REMITTANCE":        "bright_green",
+    "COMPLETE":          "bold green",
+    "NON_RENEWAL":       "red",
+    "DECLINED":          "bold red",
+}
+
+# Deterministic next-phase map (orchestrator advances after successful agent runs)
+NEXT_PHASE = {
+    "PRE_RENEWAL":       "APPLICATION",
+    "APPLICATION":       "UNDERWRITING",
+    "UNDERWRITING":      "MARKET_SUBMISSION",
+    "MARKET_SUBMISSION": "QUOTE_COLLECTION",
+    "QUOTE_COLLECTION":  "BINDING",
+    "BINDING":           "INVOICING",
+    "INVOICING":         "REMITTANCE",
+    "REMITTANCE":        "COMPLETE",
+}
+
+
+def phase_pct(phase: str) -> int:
+    """Return 0–100 progress for a phase name."""
+    try:
+        return round((PHASES.index(phase) + 1) / len(PHASES) * 100)
+    except ValueError:
+        return 0
 
 # LPL base rates per attorney by state tier (simplified)
 STATE_TIER = {

@@ -5,6 +5,9 @@ import json
 from datetime import datetime, date
 
 from agencybill.database import db, row_to_dict
+from agencybill.logging_config import get_logger
+
+log = get_logger("agencybill.market_tools")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -26,7 +29,8 @@ def list_markets(active_only: bool = True) -> list[dict]:
         if d.get("states"):
             try:
                 d["states_list"] = json.loads(d["states"])
-            except Exception:
+            except Exception as exc:
+                log.warning("Bad markets.states JSON for %s: %s", d.get("id"), exc)
                 d["states_list"] = []
         else:
             d["states_list"] = []
@@ -232,16 +236,60 @@ def get_market_quotes(workflow_id: str) -> list[dict]:
             if d.get(field):
                 try:
                     d[field.replace("_json", "")] = json.loads(d[field])
-                except Exception:
+                except Exception as exc:
+                    log.warning("Bad %s for quote %s: %s", field, d.get("id"), exc)
                     d[field.replace("_json", "")] = []
         result.append(d)
     return result
+
+
+def recommend_market_quote(market_quote_id: str, workflow_id: str,
+                            rationale: str = "") -> dict:
+    """
+    Record the agent's recommended quote without accepting it.
+    Acceptance happens only after the HITL checkpoint confirms.
+    """
+    with db() as conn:
+        row = conn.execute(
+            "SELECT id FROM market_quotes WHERE id = ? AND workflow_id = ?",
+            (market_quote_id, workflow_id),
+        ).fetchone()
+        if not row:
+            return {"error": "Quote not found for this workflow"}
+        conn.execute(
+            "UPDATE market_quotes SET status = 'presented' WHERE id = ?",
+            (market_quote_id,),
+        )
+        conn.execute(
+            """UPDATE renewal_workflows
+               SET recommended_market_quote_id = ?, notes = COALESCE(NULLIF(?, ''), notes),
+                   updated_at = datetime('now')
+               WHERE id = ?""",
+            (market_quote_id, rationale, workflow_id),
+        )
+    return {
+        "workflow_id": workflow_id,
+        "recommended_market_quote_id": market_quote_id,
+        "status": "recommended",
+        "rationale": rationale,
+    }
+
+
+def get_recommended_market_quote_id(workflow_id: str) -> str | None:
+    with db() as conn:
+        row = conn.execute(
+            "SELECT recommended_market_quote_id FROM renewal_workflows WHERE id = ?",
+            (workflow_id,),
+        ).fetchone()
+    return row["recommended_market_quote_id"] if row else None
 
 
 def accept_market_quote(market_quote_id: str, workflow_id: str) -> dict:
     """
     Mark a market quote as accepted and create a record in the `quotes` table
     so downstream agents (BindingAgent) can find it.
+
+    Does NOT mark the submission as bound — that happens in BindingAgent.
     """
     with db() as conn:
         # Mark this quote accepted, decline all others
@@ -254,10 +302,11 @@ def accept_market_quote(market_quote_id: str, workflow_id: str) -> dict:
                WHERE workflow_id = ? AND id != ? AND status != 'declined'""",
             (workflow_id, market_quote_id),
         )
-        # Mark associated submission as bound
+        # Keep submission at 'quoted' until binding completes
         conn.execute(
-            """UPDATE market_submissions SET status = 'bound'
-               WHERE id = (SELECT submission_id FROM market_quotes WHERE id = ?)""",
+            """UPDATE market_submissions SET status = 'quoted'
+               WHERE id = (SELECT submission_id FROM market_quotes WHERE id = ?)
+                 AND status NOT IN ('declined', 'passed', 'bound')""",
             (market_quote_id,),
         )
         # Fetch the accepted quote
@@ -276,7 +325,7 @@ def accept_market_quote(market_quote_id: str, workflow_id: str) -> dict:
         q_id = str(uuid.uuid4())
         label = f"{q.get('market_name', 'Market')} — ${q.get('annual_premium', 0):,.0f}/yr"
         conn.execute(
-            """INSERT OR IGNORE INTO quotes
+            """INSERT INTO quotes
                (id, workflow_id, option_label, per_claim_limit, aggregate_limit,
                 deductible, annual_premium, base_premium, status, accepted_at, notes)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'accepted', datetime('now'), ?)""",
@@ -284,11 +333,22 @@ def accept_market_quote(market_quote_id: str, workflow_id: str) -> dict:
                 q_id, workflow_id, label,
                 q.get("per_claim_limit"), q.get("aggregate_limit"),
                 q.get("deductible"), q.get("annual_premium"),
-                q.get("annual_premium"),  # base_premium = final premium (market quoted)
+                q.get("annual_premium"),
                 f"Carrier: {q.get('carrier','')} | Quote#: {q.get('quote_number','')}",
             ),
         )
     return {"quotes_id": q_id, "market_quote_id": market_quote_id, "status": "accepted"}
+
+
+def mark_submission_bound(market_quote_id: str) -> dict:
+    """Mark the market submission associated with a quote as bound (post-binding)."""
+    with db() as conn:
+        conn.execute(
+            """UPDATE market_submissions SET status = 'bound'
+               WHERE id = (SELECT submission_id FROM market_quotes WHERE id = ?)""",
+            (market_quote_id,),
+        )
+    return {"market_quote_id": market_quote_id, "status": "bound"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -1,21 +1,12 @@
 """Phase 3 — Underwriting Review Agent."""
 
 from agencybill.agents.base import BaseAgent
-from agencybill.tools.policy_tools import read_policy, update_workflow_phase, log_workflow_event
+from agencybill.tools.policy_tools import read_policy, log_workflow_event
 from agencybill.tools.firm_tools import read_firm, read_attorneys, get_firm_practice_areas
 from agencybill.tools.claims_tools import generate_loss_run, assess_risk, compute_experience_modifier
 from agencybill.tools.document_tools import save_document
 from agencybill.tools.audit_tools import log_audit_event
-from agencybill.database import db, row_to_dict
-
-
-def _get_application(workflow_id: str) -> dict:
-    with db() as conn:
-        row = conn.execute(
-            "SELECT * FROM applications WHERE workflow_id = ? ORDER BY created_at DESC LIMIT 1",
-            (workflow_id,),
-        ).fetchone()
-    return row_to_dict(row)
+from agencybill.tools.application_tools import get_application
 
 
 def _record_uw_decision(workflow_id: str, decision: str, risk_score: float,
@@ -26,9 +17,6 @@ def _record_uw_decision(workflow_id: str, decision: str, risk_score: float,
         update_workflow_status(workflow_id, "declined", notes)
     elif decision == "non_renewal":
         update_workflow_status(workflow_id, "non_renewal", notes)
-    else:
-        # eligible or refer — continue to quoting
-        pass
     log_audit_event(workflow_id, "UnderwritingAgent", "uw_decision",
                     {"decision": decision, "risk_score": risk_score, "notes": notes})
     return {"workflow_id": workflow_id, "decision": decision, "risk_score": risk_score}
@@ -50,11 +38,12 @@ Your tasks for Phase 3 Underwriting Review:
 7. Compute an experience modifier (compute_experience_modifier) based on the loss run and current premium
 8. Generate and save the underwriting memo document (save_document with 'underwriting_memo.html')
 9. Record your underwriting decision (record_uw_decision):
-   - "eligible": standard renewal, proceed to quoting
-   - "refer": borderline — flag for senior review but continue to quoting
+   - "eligible": standard renewal, proceed to market submission
+   - "refer": borderline — flag for senior review but continue to market submission
    - "declined": do not renew (only if risk_score >= 8.5 or total claims > 8)
-10. If eligible or refer: advance to QUOTING phase
-11. If declined: log a non-renewal event
+10. If declined: log a non-renewal event
+
+Do NOT advance the workflow phase yourself — the orchestrator advances to MARKET_SUBMISSION after human review.
 
 Be rigorous. Use the actual data to make your determination."""
 
@@ -93,7 +82,7 @@ Be rigorous. Use the actual data to make your determination."""
             compute_experience_modifier)
         self._add_tool("get_application", "Get the renewal application",
             {"type": "object", "properties": {"workflow_id": {"type": "string"}}, "required": ["workflow_id"]},
-            _get_application)
+            get_application)
         self._add_tool("save_document", "Render and save a document",
             {"type": "object", "properties": {
                 "template_name": {"type": "string"},
@@ -116,16 +105,12 @@ Be rigorous. Use the actual data to make your determination."""
                 "data": {"type": "object"},
             }, "required": ["workflow_id", "phase", "event_type", "actor", "data"]},
             log_workflow_event)
-        self._add_tool("advance_to_quoting",
-            "Advance workflow to QUOTING phase (use when eligible or refer)",
-            {"type": "object", "properties": {"workflow_id": {"type": "string"}}, "required": ["workflow_id"]},
-            lambda workflow_id: update_workflow_phase(workflow_id, "QUOTING"))
 
     def run_phase(self, policy_id: str, workflow_id: str) -> str:
         msg = (
             f"Begin Phase 3 Underwriting Review for policy_id={policy_id}, "
             f"workflow_id={workflow_id}. "
             "Review all available data, generate the loss run, assess risk, "
-            "make your eligibility determination, and advance the workflow appropriately."
+            "and record your eligibility determination."
         )
         return self.run(msg)
